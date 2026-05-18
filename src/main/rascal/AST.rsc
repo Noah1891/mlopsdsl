@@ -2,24 +2,24 @@ module AST
 
 data MLPipeline(loc src=|unknown:///|) = pipeline(list[Step] steps);
 
-data Step(loc src=|unknown:///|) = stepLoad(str name, DataSource source, list[SchemaField] fields)
+data Step(loc src=|unknown:///|) = stepLoad(str name, DataSource source)
           | stepSplit(str name, real ratio, str trainSet, str testSet)
-          | stepPrep(str name, str input, list[PrepTransform] transforms)
+          | stepPrep(str name, list[PrepExpr] transforms)
           | stageModel(str name, ModelExpr expr)
           | stageEval(str name, str model, str testSet, list[Threshold] thresholds)
           | stageDeploy(str name, str model, str endpoint)
           | stageMonitor(str name, str deployment, list[MonitorRule] rules);
 
-data DataSource(loc src=|unknown:///|) = srcCsv(str path)
-                | srcDb(str conn, str query);
+data DataSource(loc src=|unknown:///|) = srcCsv(str path, list[SchemaField] fields)
+                | srcDb(str conn, str query, list[SchemaField] fields);
 
-data SchemaField = schemaField(str name, FieldType fieldType);
+data SchemaField(loc src=|unknown:///|) = schemaField(str name, FieldType fieldType);
 
 data FieldType(loc src=|unknown:///|) = ftInt()
                | ftFloat()
-               | ftString()
-               | ftBool()
-               | ftDate();
+               | ftString();
+
+data PrepExpr(loc src=|unknown:///|) = prepPipe(PrepTransform transform, int source);
 
 data PrepTransform(loc src=|unknown:///|) = prepSelect(list[str] cols)
   | prepDrop(list[str] cols)
@@ -30,13 +30,13 @@ data PrepTransform(loc src=|unknown:///|) = prepSelect(list[str] cols)
 data FillStrategy(loc src=|unknown:///|) = fillMean()
                    | fillMedian()
                    | fillMode()
-                   | fillConst(str val);
+                   | fillConst(Lit val);
 
 data EncodingMethod(loc src=|unknown:///|) = encOneHot()
                       | encLabel();
 
 data ScaleMethod(loc src=|unknown:///|) = scaleMinMax()
-                   | scaleStandard();
+                   | scaleStd();
 
 data ModelExpr(loc src=|unknown:///|) = modelTrain(Algorithm algo, str train, list[HyperParam] params);
 

@@ -6,24 +6,24 @@ layout Whitespace
 
 start syntax Pipeline = pipeline: "pipeline" "{" Step+ steps"}";
 
-syntax Step = stepLoad: "load" Id name "from" DataSource source ("with schema" "{" {SchemaField ","}+  fields "}")?
+syntax Step = stepLoad: "load" Id name "from" DataSource source
            | stepSplit: "split" Id name "(" "ratio" "=" FloatLit ratio ")" "into" Id trainSet "and" Id testSet
-           | stepPrep: "preparation" Id name "of" Id source "=" {PrepTransform "-\>"}+ transforms
+           | stepPrep: "pipeline" Id name "with" "(" {PrepExpr ","}+ transforms ")"
            | stageModel: "model" Id name "=" ModelExpr expr
            | stageEval: "evaluation" Id name "of" Id model "on" Id testSet "with" "(" {Threshold ","}+ thresholds ")"
-           | stageDeploy: "deployment" Id name "of" Id model "at" "endpoint" StrLit endpoint
+           | stageDeploy: "deployment" Id name "of" Id model "at" "endpoint" IntLit endpoint
            | stageMonitor: "monitoring" Id name "of" Id deployment "with" "{" {MonitorRule ","}+ rules "}";
 
-syntax DataSource = srcCsv: "csv" "(" Path path ")"
-                | srcDb: "db" "(" StrLit conn "," StrLit query ")";
+syntax DataSource = srcCsv: "csv" "(" Path path "," {SchemaField ","}+  fields")"
+                | srcDb: "db" "(" StrLit conn "," StrLit query "," {SchemaField ","}+  fields ")";
 
 syntax SchemaField = schemaField: Id name ":" FieldType fieldType;
 
 syntax FieldType = ftInt: "int"
                 | ftFloat: "float"
-                | ftString: "string"
-                | ftBool: "bool"
-                | ftDate: "date";
+                | ftString: "string";
+
+syntax PrepExpr = prepPipe: "transformation" PrepTransform transform "on" "schema" "of" Id source;
 
 syntax PrepTransform = prepSelect: "select" "(" "[" {StrLit ","}+ cols "]" ")"
   | prepDrop: "drop" "(" "[" {StrLit ","}+ cols "]" ")"
@@ -34,13 +34,13 @@ syntax PrepTransform = prepSelect: "select" "(" "[" {StrLit ","}+ cols "]" ")"
 syntax FillStrategy = fillMean: "mean"
                    | fillMedian: "median"
                    | fillMode: "mode"
-                   | fillConst: "const" "(" StrLit value ")";
+                   | fillConst: "const" "(" Lit value ")";
 
 syntax EncodingMethod = encOneHot: "onehot"
                       | encLabel: "label";
 
 syntax ScaleMethod = scaleMinMax: "minmax"
-                   | scaleStandard: "standard";
+                   | scaleStd: "std";
                   
 syntax ModelExpr = modelTrain: "train" Algorithm algo "on" Id train "with" "(" {HyperParam ","}+ params ")";
 
@@ -73,15 +73,15 @@ lexical StrLit   = "\"" ![\"\\]* "\"";
 lexical PathContent = ![\"\\\ ]*;
 
 keyword Keywords
-  = "pipeline" | "load" | "from" | "with" | "schema"
-  | "split" | "ratio" | "prep" | "model" | "deploy" | "monitor"
+  = "pipeline" | "load" | "from" | "with" | "transformation" | "schema"
+  | "split" | "ratio" | "model" | "monitoring"
   | "into" | "and" | "preparation" | "of" | "on" | "with" | "evaluation" | "deployment" | "endpoint" | "accuracy" | "precision" | "recall" | "f1"
   | "csv" | "db" 
   | "encode" | "scale" | "fillna" | "select" | "drop"
   | "train" | "on" | "serve" | "at" | "endpoint" 
   | "to" | "observe" | "drift" | "latency"
   | "RandomForest" | "LinReg" | "NN" 
-  | "minmax" | "standard" | "mean" | "median" | "mode" | "const"
+  | "minmax" | "std" | "mean" | "median" | "mode" | "const"
   | "onehot" | "label" 
   | "int" | "float" | "string" | "bool" | "date" 
   | "ms";
