@@ -1,0 +1,6 @@
+dependencies:
+  - scikit-learn
+  - pandas
+  - scipy
+  - mlflow
+  - joblib
