@@ -1,30 +1,21 @@
 module AST
 
-data MLPipeline(loc src=|unknown:///|) = pipeline(list[Step] steps);
+data Pipeline(loc src=|unknown:///|) = pipeline(str name, list[Step] steps);
 
-data Step(loc src=|unknown:///|) = stepLoad(str name, DataSource source)
-          | stepSplit(str name, real ratio, str trainSet, str testSet)
-          | stepPrep(str name, list[PrepExpr] transforms)
-          | stageModel(str name, ModelExpr expr)
-          | stageEval(str name, str model, str testSet, list[Threshold] thresholds)
-          | stageDeploy(str name, str model, str endpoint)
-          | stageMonitor(str name, str deployment, list[MonitorRule] rules);
+data Step(loc src=|unknown:///|) = stepLoad(DataSource source, str y)
+          | stepSplit(list[Param] splitParams)
+          | stepSelect(list[str] num_features, list[str] cat_features)
+          | stepTrans(list[PrepTransform] transforms)
+          | stepModel(ModelExpr expr)
+          | stepEval(list[Threshold] thresholds)
+          | stepDeploy(int port)
+          | stepMonitor(list[MonitorRule] rules);
 
-data DataSource(loc src=|unknown:///|) = srcCsv(str path, list[SchemaField] fields)
-                | srcDb(str conn, str query, list[SchemaField] fields);
+data DataSource(loc src=|unknown:///|) = srcCsv(str path)
+                | srcDb(str conn, str query);
 
-data SchemaField(loc src=|unknown:///|) = schemaField(str name, FieldType fieldType);
-
-data FieldType(loc src=|unknown:///|) = ftInt()
-               | ftFloat()
-               | ftString();
-
-data PrepExpr(loc src=|unknown:///|) = prepPipe(PrepTransform transform, int source);
-
-data PrepTransform(loc src=|unknown:///|) = prepSelect(list[str] cols)
-  | prepDrop(list[str] cols)
-  | prepFill(str col, FillStrategy strategy)
-  | prepEncode(str col, EncodingMethod encodeMethod)
+data PrepTransform(loc src=|unknown:///|) = prepFill(FillStrategy strategy)
+  | prepEncode(EncodingMethod encodeMethod)
   | prepScale(ScaleMethod scaleMethod);
 
 data FillStrategy(loc src=|unknown:///|) = fillMean()
@@ -38,13 +29,13 @@ data EncodingMethod(loc src=|unknown:///|) = encOneHot()
 data ScaleMethod(loc src=|unknown:///|) = scaleMinMax()
                    | scaleStd();
 
-data ModelExpr(loc src=|unknown:///|) = modelTrain(Algorithm algo, str train, list[HyperParam] params);
+data ModelExpr(loc src=|unknown:///|) = modelTrain(Algorithm algo, list[Param] hyperParams);
 
 data Algorithm(loc src=|unknown:///|) = algoLR()
                | algoRF()
-               | algoNN();
+               | algoLogReg();
 
-data HyperParam(loc src=|unknown:///|) = hp(str name, Lit val);
+data Param(loc src=|unknown:///|) = hp(str name, Lit val);
 
 data Lit(loc src=|unknown:///|) = intLit(int intVal)
          | floatLit(real floatVal)
@@ -57,5 +48,5 @@ data Metric(loc src=|unknown:///|) = mAccuracy()
             | mRecall()
             | mF1();
 
-data MonitorRule(loc src=|unknown:///|) = ruleDrift(str feature, real threshold)
+data MonitorRule(loc src=|unknown:///|) = ruleDrift(str feature, int window, real threshold)
                 | ruleLatency(int ms);
