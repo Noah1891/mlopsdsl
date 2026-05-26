@@ -2,10 +2,10 @@ pipeline demo {
     load (
         csv("data/irisRaw.csv"),
         y = "churn"
-    ) 
-    
+    )
+
     split (
-        ratio = 0.7,
+        test_size = 0.7,
         random_state = 42
     )
 
@@ -22,7 +22,8 @@ pipeline demo {
     
     model RandomForest (
         n_estimators = 100,
-        max_depth = 5
+        max_depth = 5,
+        criterion = "gini"
     )
     
     evaluation (

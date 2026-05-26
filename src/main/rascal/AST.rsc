@@ -1,18 +1,27 @@
 module AST
 
-data Pipeline(loc src=|unknown:///|) = pipeline(str name, list[Step] steps);
+data Pipeline(loc src=|unknown:///|) = pipeline(str name, Steps steps);
 
-data Step(loc src=|unknown:///|) = stepLoad(DataSource source, str y)
-          | stepSplit(list[Param] splitParams)
-          | stepSelect(list[str] num_features, list[str] cat_features)
-          | stepTrans(list[PrepTransform] transforms)
-          | stepModel(ModelExpr expr)
-          | stepEval(list[Threshold] thresholds)
-          | stepDeploy(int port)
-          | stepMonitor(list[MonitorRule] rules);
+data Steps = steps(Load load, list[Split] split, list[Select] select, list[Trans] trans, Model model, list[Eval] eval, list[Deploy] deploy, list[Monitor] monitor);
 
-data DataSource(loc src=|unknown:///|) = srcCsv(str path)
-                | srcDb(str conn, str query);
+data Load(loc src=|unknown:///|) = stepLoad(DataSource source, StrLit y);
+
+data Split(loc src=|unknown:///|) = stepSplit(list[Param] splitParams);
+
+data Select(loc src=|unknown:///|) = stepSelect(list[StrLit] num_features, list[StrLit] cat_features);
+
+data Trans(loc src=|unknown:///|) = stepTrans(list[PrepTransform] transforms);
+
+data Model(loc src=|unknown:///|) = stepModel(ModelExpr expr);
+
+data Eval(loc src=|unknown:///|) = stepEval(list[Threshold] thresholds);
+
+data Deploy(loc src=|unknown:///|) = stepDeploy(int port);
+
+data Monitor(loc src=|unknown:///|) = stepMonitor(list[MonitorRule] rules);
+
+data DataSource(loc src=|unknown:///|) = srcCsv(StrLit path)
+                | srcDb(StrLit conn, StrLit query);
 
 data PrepTransform(loc src=|unknown:///|) = prepFill(FillStrategy strategy)
   | prepEncode(EncodingMethod encodeMethod)
@@ -39,7 +48,7 @@ data Param(loc src=|unknown:///|) = hp(str name, Lit val);
 
 data Lit(loc src=|unknown:///|) = intLit(int intVal)
          | floatLit(real floatVal)
-         | strLit(str strVal);
+         | strLit(StrLit strVal);
 
 data Threshold(loc src=|unknown:///|) = threshold(Metric metric, real val);
 
@@ -48,5 +57,7 @@ data Metric(loc src=|unknown:///|) = mAccuracy()
             | mRecall()
             | mF1();
 
-data MonitorRule(loc src=|unknown:///|) = ruleDrift(str feature, int window, real threshold)
+data MonitorRule(loc src=|unknown:///|) = ruleDrift(StrLit feature, int window, real threshold)
                 | ruleLatency(int ms);
+
+data StrLit(loc src = |unknown:///|) = strLit(str content);

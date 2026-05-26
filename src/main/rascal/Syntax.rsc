@@ -1,19 +1,27 @@
 module Syntax
 
-layout Whitespace
-  = [\t\n\r\ ]*
-  | @category="Comment" "#" ![\n]* $;
+layout Layout = WhitespaceAndComment* !>> [\ \t\n\r#];
+lexical WhitespaceAndComment = [\ \t\n\r] | @category="Comment" "#" ![\n]* $;
 
-start syntax Pipeline = pipeline: "pipeline" Id name "{" Step+ steps "}";
+start syntax Pipeline = pipeline: "pipeline" Id name "{" Steps steps "}";
 
-syntax Step = stepLoad: "load" "(" DataSource source "," "y" "=" StrLit y ")"
-           | stepSplit: "split" "(" {Param ","}* splitParams ")"
-           | stepSelect: "select" "(" "num_features" "=" "[" { StrLit ","}* num_features "]" "," "cat_features" "=" "[" {StrLit ","}* cat_features "]" ")"
-           | stepTrans: "transformation" "(" {PrepTransform ","}+ transforms ")"
-           | stepModel: "model" ModelExpr expr
-           | stepEval: "evaluation" "(" {Threshold ","}+ thresholds ")"
-           | stepDeploy: "deployment" "(" "port" "=" IntLit port ")"
-           | stepMonitor: "monitoring" "(" {MonitorRule ","}+ rules ")";
+syntax Steps = steps: Load load Split? split Select? select Trans? trans Model model Eval? eval Deploy? deploy Monitor? monitor; 
+
+syntax Load = stepLoad: "load" "(" DataSource source "," "y" "=" StrLit y ")";
+
+syntax Split = stepSplit: "split" "(" {Param ","}* splitParams ")";
+
+syntax Select = stepSelect: "select" "(" "num_features" "=" "[" { StrLit ","}* num_features "]" "," "cat_features" "=" "[" {StrLit ","}* cat_features "]" ")";
+
+syntax Trans = stepTrans: "transformation" "(" {PrepTransform ","}+ transforms ")";
+
+syntax Model = stepModel: "model" ModelExpr expr;
+
+syntax Eval = stepEval: "evaluation" "(" {Threshold ","}+ thresholds ")";
+
+syntax Deploy = stepDeploy: "deployment" "(" "port" "=" IntLit port ")";
+
+syntax Monitor = stepMonitor: "monitoring" "(" {MonitorRule ","}+ rules ")";
 
 syntax DataSource = srcCsv: "csv" "(" StrLit path ")"
                 | srcDb: "db" "(" StrLit conn "," StrLit query ")";
@@ -54,12 +62,13 @@ syntax Metric = mAccuracy: "accuracy"
 
 syntax MonitorRule = ruleDrift: "drift" "(" "feature" "=" StrLit feature "," "window" "=" IntLit window ")" "\<=" FloatLit threshold
                 | ruleLatency: "latency" "\<=" IntLit ms;
+
+syntax StrLit = strLit: "\"" StrContent content "\"";
   
 lexical Id = [a-zA-Z_][a-zA-Z0-9_]* !>> [a-zA-Z0-9_] \ Keywords;
 lexical IntLit   = [0-9]+;
 lexical FloatLit = [0-9]+ "." [0-9]+;
-lexical StrLit = "\"" StrContent content "\"";
-lexical StrContent = ![\"\\]*;
+lexical StrContent = ![\"]*;
 
 keyword Keywords
   = "pipeline" 
