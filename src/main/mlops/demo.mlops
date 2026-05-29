@@ -1,11 +1,11 @@
 pipeline demo {
     load (
-        csv("data/irisRaw.csv"),
+        path = "data/irisRaw.csv",
         y = "churn"
     )
 
     split (
-        test_size = 0.7,
+        train_size = 0.7,
         random_state = 42
     )
 

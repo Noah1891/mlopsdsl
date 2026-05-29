@@ -5,9 +5,9 @@ lexical WhitespaceAndComment = [\ \t\n\r] | @category="Comment" "#" ![\n]* $;
 
 start syntax Pipeline = pipeline: "pipeline" Id name "{" Steps steps "}";
 
-syntax Steps = steps: Load load Split? split Select? select Trans? trans Model model Eval? eval Deploy? deploy Monitor? monitor; 
+syntax Steps = steps: Load load Split? split Select select Trans? trans Model model Eval? eval Deploy? deploy Monitor? monitor; 
 
-syntax Load = stepLoad: "load" "(" StrLit path "," "y" "=" StrLit y ")";
+syntax Load = stepLoad: "load" "(" "path" "=" StrLit path "," "y" "=" StrLit y ")";
 
 syntax Split = stepSplit: "split" "(" "train_size" "=" FloatLit "," ("random_state" "=" IntLit)? ")";
 

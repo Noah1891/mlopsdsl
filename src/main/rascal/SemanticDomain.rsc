@@ -22,13 +22,13 @@ data Selecter = selecter(set[str] num_feats, set[str] cat_feats);
 
 data Transformer = transformer(lrel[str,str,str] trans);
 
-data Modeler = modeler();
+data Modeler = modeler(bool usesTrainSet, str modelType, rel[str,str] params);
 
-data Evaluator = evaluater();
+data Evaluator = evaluator(rel[str,real] threshs);
 
-data Deployer = deployer();
+data Deployer = deployer(int port);
 
-data Monitorer = monitorer();
+data Monitorer = monitorer(rel[str,int,real] rules, int latency);
 
 MLOpsStore initStore() {
     return store(nothing(), nothing(), nothing(), nothing(), nothing(), nothing(), nothing(), nothing());

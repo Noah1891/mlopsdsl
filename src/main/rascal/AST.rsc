@@ -2,7 +2,7 @@ module AST
 
 data Pipeline(loc src=|unknown:///|) = pipeline(str name, Steps steps);
 
-data Steps = steps(Load load, list[Split] split, list[Select] select, list[Trans] trans, Model model, list[Eval] eval, list[Deploy] deploy, list[Monitor] monitor);
+data Steps = steps(Load load, list[Split] split, Select select, list[Trans] trans, Model model, list[Eval] eval, list[Deploy] deploy, list[Monitor] monitor);
 
 data Load(loc src=|unknown:///|) = stepLoad(StrLit path, StrLit y);
 
@@ -14,11 +14,11 @@ data Trans(loc src=|unknown:///|) = stepTrans(list[PrepTransform] transforms);
 
 data Model(loc src=|unknown:///|) = stepModel(ModelExpr expr);
 
-data Eval(loc src=|unknown:///|) = stepEval(list[Threshold] thresholds);
+data Eval(loc src=|unknown:///|) = stepEval(set[Threshold] thresholds);
 
 data Deploy(loc src=|unknown:///|) = stepDeploy(int port);
 
-data Monitor(loc src=|unknown:///|) = stepMonitor(list[MonitorRule] rules);
+data Monitor(loc src=|unknown:///|) = stepMonitor(set[MonitorRule] rules);
 
 data DataSource(loc src=|unknown:///|) = srcCsv(StrLit path)
                 | srcDb(StrLit conn, StrLit query);
@@ -37,7 +37,7 @@ data EncodingMethod(loc src=|unknown:///|) = encOneHot()
 data ScaleMethod(loc src=|unknown:///|) = scaleMinMax()
                    | scaleStd();
 
-data ModelExpr(loc src=|unknown:///|) = modelTrain(Algorithm algo, list[Param] hyperParams);
+data ModelExpr(loc src=|unknown:///|) = modelTrain(Algorithm algo, set[Param] hyperParams);
 
 data Algorithm(loc src=|unknown:///|) = algoLR()
                | algoRF()
