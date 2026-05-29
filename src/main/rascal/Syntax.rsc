@@ -7,9 +7,9 @@ start syntax Pipeline = pipeline: "pipeline" Id name "{" Steps steps "}";
 
 syntax Steps = steps: Load load Split? split Select? select Trans? trans Model model Eval? eval Deploy? deploy Monitor? monitor; 
 
-syntax Load = stepLoad: "load" "(" DataSource source "," "y" "=" StrLit y ")";
+syntax Load = stepLoad: "load" "(" StrLit path "," "y" "=" StrLit y ")";
 
-syntax Split = stepSplit: "split" "(" {Param ","}* splitParams ")";
+syntax Split = stepSplit: "split" "(" "train_size" "=" FloatLit "," ("random_state" "=" IntLit)? ")";
 
 syntax Select = stepSelect: "select" "(" "num_features" "=" "[" { StrLit ","}* num_features "]" "," "cat_features" "=" "[" {StrLit ","}* cat_features "]" ")";
 
@@ -23,17 +23,13 @@ syntax Deploy = stepDeploy: "deployment" "(" "port" "=" IntLit port ")";
 
 syntax Monitor = stepMonitor: "monitoring" "(" {MonitorRule ","}+ rules ")";
 
-syntax DataSource = srcCsv: "csv" "(" StrLit path ")"
-                | srcDb: "db" "(" StrLit conn "," StrLit query ")";
-
-syntax PrepTransform = prepFill: "fillna" "(" FillStrategy strategy ")"
-  | prepEncode: "encode" "(" EncodingMethod method ")"
-  | prepScale: "scale" "(" ScaleMethod method ")";
+syntax PrepTransform = prepFill: "fillna" "(" StrLit feature "," FillStrategy strategy ")"
+  | prepEncode: "encode" "(" StrLit feature "," EncodingMethod method ")"
+  | prepScale: "scale" "(" StrLit feature "," ScaleMethod method ")";
   
 syntax FillStrategy = fillMean: "mean"
                    | fillMedian: "median"
-                   | fillMode: "mode"
-                   | fillConst: "const" "(" Lit value ")";
+                   | fillMode: "mode";
 
 syntax EncodingMethod = encOneHot: "onehot"
                       | encLabel: "label";

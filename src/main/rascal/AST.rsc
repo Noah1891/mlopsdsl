@@ -4,11 +4,11 @@ data Pipeline(loc src=|unknown:///|) = pipeline(str name, Steps steps);
 
 data Steps = steps(Load load, list[Split] split, list[Select] select, list[Trans] trans, Model model, list[Eval] eval, list[Deploy] deploy, list[Monitor] monitor);
 
-data Load(loc src=|unknown:///|) = stepLoad(DataSource source, StrLit y);
+data Load(loc src=|unknown:///|) = stepLoad(StrLit path, StrLit y);
 
-data Split(loc src=|unknown:///|) = stepSplit(list[Param] splitParams);
+data Split(loc src=|unknown:///|) = stepSplit(real train_size, list[int] random_state);
 
-data Select(loc src=|unknown:///|) = stepSelect(list[StrLit] num_features, list[StrLit] cat_features);
+data Select(loc src=|unknown:///|) = stepSelect(set[StrLit] num_features, set[StrLit] cat_features);
 
 data Trans(loc src=|unknown:///|) = stepTrans(list[PrepTransform] transforms);
 
@@ -23,14 +23,13 @@ data Monitor(loc src=|unknown:///|) = stepMonitor(list[MonitorRule] rules);
 data DataSource(loc src=|unknown:///|) = srcCsv(StrLit path)
                 | srcDb(StrLit conn, StrLit query);
 
-data PrepTransform(loc src=|unknown:///|) = prepFill(FillStrategy strategy)
-  | prepEncode(EncodingMethod encodeMethod)
-  | prepScale(ScaleMethod scaleMethod);
+data PrepTransform(loc src=|unknown:///|) = prepFill(StrLit feature, FillStrategy strategy)
+  | prepEncode(StrLit feature, EncodingMethod encodeMethod)
+  | prepScale(StrLit feature, ScaleMethod scaleMethod);
 
 data FillStrategy(loc src=|unknown:///|) = fillMean()
                    | fillMedian()
-                   | fillMode()
-                   | fillConst(Lit val);
+                   | fillMode();
 
 data EncodingMethod(loc src=|unknown:///|) = encOneHot()
                       | encLabel();

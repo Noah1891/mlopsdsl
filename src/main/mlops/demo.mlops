@@ -15,9 +15,13 @@ pipeline demo {
     ) 
         
     transformation (
-        fillna(median),
-        encode(onehot),
-        scale(std)
+        fillna("age", mean),
+        fillna("income", median),
+        encode("city", onehot),
+        encode("category", onehot),
+        scale("age", std),
+        scale("income", minmax),
+        scale("score", std)
     )
     
     model RandomForest (
