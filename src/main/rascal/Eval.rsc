@@ -1,5 +1,6 @@
 module Eval
 
+import ParseTree;
 import List;
 import String;
 import Exception;
@@ -8,6 +9,7 @@ import ListRelation;
 import List;
 import Set;
 
+import Syntax;
 import AST;
 import SemanticDomain;
 
@@ -21,6 +23,11 @@ data RuntimeException
     | noTestSetDefined(str cause)
     | noDeploymentDefined(str cause);
 
+MLOpsStore evalPipeline(Syntax::Pipeline pipeline) {
+    pipelineAST = implode(#AST::Pipeline, pipeline);
+    return evalPipeline(pipelineAST);
+}
+
 MLOpsStore evalPipeline(pipeline(str _, Steps steps)) {
     return evalSteps(steps, initStore());
 }
@@ -31,7 +38,7 @@ MLOpsStore evalSteps(steps(Load load, list[Split] split, Select select, list[Tra
     if (size(split) != 0) {
         s1 = evalSplit(split[0], s0);
     }
-    s2 = evalSelect(select[0], s1);
+    s2 = evalSelect(select, s1);
     s3 = s2;
     if (size(trans) != 0) {
         s3 = evalTrans(trans[0], s2);
@@ -246,8 +253,8 @@ MLOpsStore evalMonitor(stepMonitor(set[MonitorRule] rules), MLOpsStore s) {
         if (ruleDrift(StrLit feature, int window, real threshold) := rule) {
             str feat = evalStrLit(feature);
             if (feat notin (s.selecter.val.num_feats + s.selecter.val.cat_feats)) {
-            throw featureNotSelected("The feature that should be monitored was not selected.");
-        }
+                throw featureNotSelected("The feature that should be monitored was not selected.");
+            }
             drifts += <feat, window, threshold>;
         } else if (ruleLatency(int ms) := rule) {
             latency = ms;
