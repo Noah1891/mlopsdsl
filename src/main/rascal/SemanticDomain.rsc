@@ -30,38 +30,20 @@ data Deployer = deployer(int port);
 
 data Monitorer = monitorer(rel[str,int,real] rules, int latency);
 
-MLOpsStore initStore() {
-    return store(nothing(), nothing(), nothing(), nothing(), nothing(), nothing(), nothing(), nothing());
-}
+MLOpsStore initStore() = store(nothing(), nothing(), nothing(), nothing(), nothing(), nothing(), nothing(), nothing());
 
-MLOpsStore addToStore(MLOpsStore s, Loader l) {
-    return store(just(l), s.splitter, s.selecter, s.transformer, s.modeler, s.evaluator, s.deployer, s.monitorer);
-}
+MLOpsStore addToStore(MLOpsStore s, Loader l) = store(just(l), s.splitter, s.selecter, s.transformer, s.modeler, s.evaluator, s.deployer, s.monitorer);
 
-MLOpsStore addToStore(MLOpsStore s, Splitter sp) {
-    return store(s.loader, just(sp), s.selecter, s.transformer, s.modeler, s.evaluator, s.deployer, s.monitorer);
-}
+MLOpsStore addToStore(MLOpsStore s, Splitter sp) = store(s.loader, just(sp), s.selecter, s.transformer, s.modeler, s.evaluator, s.deployer, s.monitorer);
 
-MLOpsStore addToStore(MLOpsStore s, Selecter se) {
-    return store(s.loader, s.splitter, just(se), s.transformer, s.modeler, s.evaluator, s.deployer, s.monitorer);
-}
+MLOpsStore addToStore(MLOpsStore s, Selecter se) = store(s.loader, s.splitter, just(se), s.transformer, s.modeler, s.evaluator, s.deployer, s.monitorer);
 
-MLOpsStore addToStore(MLOpsStore s, Transformer t) {
-    return store(s.loader, s.splitter, s.selecter, just(t), s.modeler, s.evaluator, s.deployer, s.monitorer);
-}
+MLOpsStore addToStore(MLOpsStore s, Transformer t) = store(s.loader, s.splitter, s.selecter, just(t), s.modeler, s.evaluator, s.deployer, s.monitorer);
 
-MLOpsStore addToStore(MLOpsStore s, Modeler m) {
-    return store(s.loader, s.splitter, s.selecter, s.transformer, just(m), s.evaluator, s.deployer, s.monitorer);
-}
+MLOpsStore addToStore(MLOpsStore s, Modeler m) = store(s.loader, s.splitter, s.selecter, s.transformer, just(m), s.evaluator, s.deployer, s.monitorer);
 
-MLOpsStore addToStore(MLOpsStore s, Evaluator e) {
-    return store(s.loader, s.splitter, s.selecter, s.transformer, s.modeler, just(e), s.deployer, s.monitorer);
-}
+MLOpsStore addToStore(MLOpsStore s, Evaluator e) = store(s.loader, s.splitter, s.selecter, s.transformer, s.modeler, just(e), s.deployer, s.monitorer);
 
-MLOpsStore addToStore(MLOpsStore s, Deployer d) {
-    return store(s.loader, s.splitter, s.selecter, s.transformer, s.modeler, s.evaluator, just(d), s.monitorer);
-}
+MLOpsStore addToStore(MLOpsStore s, Deployer d) = store(s.loader, s.splitter, s.selecter, s.transformer, s.modeler, s.evaluator, just(d), s.monitorer);
 
-MLOpsStore addToStore(MLOpsStore s, Monitorer mo) {
-    return store(s.loader, s.splitter, s.selecter, s.transformer, s.modeler, s.evaluator, s.deployer, just(mo));
-}
+MLOpsStore addToStore(MLOpsStore s, Monitorer mo) = store(s.loader, s.splitter, s.selecter, s.transformer, s.modeler, s.evaluator, s.deployer, just(mo));

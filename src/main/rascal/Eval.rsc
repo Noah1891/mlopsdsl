@@ -6,7 +6,6 @@ import String;
 import Exception;
 import util::Maybe;
 import ListRelation;
-import List;
 import Set;
 
 import Syntax;
