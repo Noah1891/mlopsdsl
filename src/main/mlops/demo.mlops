@@ -41,6 +41,5 @@ pipeline demo {
 
     monitoring (
         drift(feature = "age", window = 500) <= 0.05
-    )
-        
+    )     
 }

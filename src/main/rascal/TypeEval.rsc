@@ -62,7 +62,8 @@ TypeEnv evalSplit(stepSplit(real _, list[int] _), TypeEnv tenv) {
 
 TypeEnv evalSelect(stepSelect(set[StrLit] num_features, set[StrLit] cat_features), TypeEnv tenv) {
     FeatureEnv fenv = evalFeatures(num_features, cat_features);
-    return addToTypeEnv(tenv, fenv);
+    tenv = addToTypeEnv(tenv, fenv);
+    return addToTypeEnv(tenv, selectType());
 }
 
 FeatureEnv evalFeatures(set[StrLit] num_features, set[StrLit] cat_features) {
@@ -142,7 +143,7 @@ TypeEnv evalMonitor(stepMonitor(set[MonitorRule] _), TypeEnv tenv) {
         throw noTypeDefined("Deployment has no type.");
     }
     if (deployType() := tenv.deployT.val) {
-        return addToTypeEnv(tenv, deployType());
+        return addToTypeEnv(tenv, monitorType());
     } else {
         throw invalidType("Deployment is not of type \"deploy\".");
     }

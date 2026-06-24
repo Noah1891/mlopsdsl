@@ -54,3 +54,50 @@ TypeEnv addToTypeEnv(TypeEnv tenv, DeployType d) = typeEnv(tenv.loadT, tenv.spli
 TypeEnv addToTypeEnv(TypeEnv tenv, MonitorType mo) = typeEnv(tenv.loadT, tenv.splitT, tenv.selectT, tenv.transT, tenv.modelT, tenv.evalT, tenv.deployT, just(mo), tenv.featEnv);
 
 TypeEnv addToTypeEnv(TypeEnv tenv, FeatureEnv fenv) = typeEnv(tenv.loadT, tenv.splitT, tenv.selectT, tenv.transT, tenv.modelT, tenv.evalT, tenv.deployT, tenv.monitorT, fenv);
+
+str typeEnvToJson(TypeEnv tenv) {
+    str json = "{";
+    json += "\"load\": " + maybePresent(tenv.loadT) + ",";
+    json += "\"split\": " + maybePresent(tenv.splitT) + ",";
+    json += "\"select\": " + maybePresent(tenv.selectT) + ",";
+    json += "\"trans\": " + maybePresent(tenv.transT) + ",";
+    json += "\"model\": " + maybePresent(tenv.modelT) + ",";
+    json += "\"eval\": " + maybePresent(tenv.evalT) + ",";
+    json += "\"deploy\": " + maybePresent(tenv.deployT) + ",";
+    json += "\"monitor\": " + maybePresent(tenv.monitorT) + ",";
+    json += "\"featureEnv\": " + featureEnvToJson(tenv.featEnv);
+    json += "}";
+    return json;
+}
+
+str maybePresent(Maybe[&T] m) {
+    if (just(_) := m) {
+        return "true";
+    }
+    return "false";
+}
+
+
+str featureEnvToJson(FeatureEnv fenv) {
+    str json = "{";
+    bool first = true;
+    for (key <- fenv) {
+        if (!first) {
+            json += ",";
+        }
+        json += "\"<key>\": " + featureTypeToJson(fenv[key]);
+        first = false;
+    }
+    json += "}";
+    return json;
+}
+
+str featureTypeToJson(FeatureType ft) {
+    if (numerical() := ft) {
+        return "\"numerical\"";
+    }
+    if (categorical() := ft) {
+        return "\"categorical\"";
+    }
+    return "\"unknown\"";
+}

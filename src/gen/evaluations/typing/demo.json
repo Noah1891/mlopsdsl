@@ -1,0 +1,1 @@
+{"load": true,"split": true,"select": true,"trans": true,"model": true,"eval": true,"deploy": true,"monitor": true,"featureEnv": {"income": "numerical","city": "categorical","score": "numerical","category": "categorical","age": "numerical"}}

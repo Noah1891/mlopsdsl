@@ -1,4 +1,4 @@
-module Eval
+module EvalPipeline
 
 import ParseTree;
 import List;
@@ -27,8 +27,8 @@ MLOpsStore evalPipeline(Syntax::Pipeline pipeline) {
     return evalPipeline(pipelineAST);
 }
 
-MLOpsStore evalPipeline(pipeline(str _, Steps steps)) {
-    return evalSteps(steps, initStore());
+MLOpsStore evalPipeline(pipeline(str name, Steps steps)) {
+    return evalSteps(steps, initStore(name));
 }
 
 MLOpsStore evalSteps(steps(Load load, list[Split] split, Select select, list[Trans] trans, Model model, list[Eval] eval, list[Deploy] deploy, list[Monitor] monitor), MLOpsStore s) {
@@ -69,6 +69,9 @@ str evalStrLit(strLit(str s)) {
 }
 
 MLOpsStore evalSplit(stepSplit(real train_size, list[int] random_state), MLOpsStore s) {
+    if (train_size <= 0) {
+        throw invalidTrainSize("Train size is below 0.0");
+    }
     if (train_size >= 1) {
         throw invalidTrainSize("Train size exceeds 1.0");
     }
