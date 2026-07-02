@@ -93,7 +93,7 @@ MLOpsStore evalSelect(stepSelect(set[StrLit] num_features, set[StrLit] cat_featu
     for (StrLit cat_feat <- cat_features) {
         cat_feats += evalStrLit(cat_feat);
     }
-    if (s.loader.val.y in (num_feats + cat_feats)) {
+    if (s.loader.y in (num_feats + cat_feats)) {
         throw resultSelectedAsFeature("The result column cannot be a feature.");
     }
     return addToStore(s, selecter(num_feats, cat_feats));
@@ -103,7 +103,7 @@ MLOpsStore evalTrans(stepTrans(list[PrepTransform] transforms), MLOpsStore s) {
     lrel[str tr, str feat, str param] trans = [];
     for (PrepTransform pt <- transforms) {
         tuple[str tr, str feat, str param] ptrans = evalPrepTransform(pt);
-        if (ptrans.feat notin (s.selecter.val.num_feats + s.selecter.val.cat_feats)) {
+        if (ptrans.feat notin (s.selecter.num_feats + s.selecter.cat_feats)) {
             throw featureNotSelected("The feature that should be transformed was not selected.");
         }
         trans += ptrans;
@@ -111,7 +111,7 @@ MLOpsStore evalTrans(stepTrans(list[PrepTransform] transforms), MLOpsStore s) {
     list[list[str]] transforms_per_features = groupDomainByRange(trans<tr,feat>);
     for (list[str] transforms_per_feature <- transforms_per_features) {
         if (size(toSet(transforms_per_feature)) != size(transforms_per_feature)) {
-            throw duplicateTransform("Feature must not transformed multiple times by the same method.");
+            throw duplicateTransform("Feature must not be transformed multiple times by the same method.");
         }
         if ([*_, "scale", *_, "fillna", *_]  := transforms_per_feature || [*_, "scale", *_, "encode", *_]  := transforms_per_feature) {
             throw transformOrderViolation("Scaling must be the last transformation of a feature.");
@@ -160,11 +160,11 @@ tuple[str tr, str feat, str strat] evalPrepTransform(prepScale(StrLit feature, S
 }
 
 str evalScaleMethod(scaleMinMax()) {
-    return "onehot";
+    return "minmax";
 }
 
 str evalScaleMethod(scaleStd()) {
-    return "label";
+    return "std";
 }
 
 MLOpsStore evalModel(stepModel(modelTrain(Algorithm algo, set[Param] hyperParams)), MLOpsStore s) {
@@ -245,22 +245,21 @@ MLOpsStore evalDeploy(stepDeploy(int port), MLOpsStore s) {
     return addToStore(s, deployer(port));
 }
 
-MLOpsStore evalMonitor(stepMonitor(set[MonitorRule] rules), MLOpsStore s) {
+MLOpsStore evalMonitor(stepMonitor(set[DriftRule] dRules, list[LatencyRule] lRule), MLOpsStore s) {
     if (s.deployer == nothing()) {
         throw noDeploymentDefined("No deployment to monitor was defined.");
     }
     rel[str,int,real] drifts = {};
     int latency = 500;
-    for (MonitorRule rule <- rules) {
-        if (ruleDrift(StrLit feature, int window, real threshold) := rule) {
-            str feat = evalStrLit(feature);
-            if (feat notin (s.selecter.val.num_feats + s.selecter.val.cat_feats)) {
-                throw featureNotSelected("The feature that should be monitored was not selected.");
-            }
-            drifts += <feat, window, threshold>;
-        } else if (ruleLatency(int ms) := rule) {
-            latency = ms;
+    for (DriftRule dRule <- dRules) {
+        str feat = evalStrLit(dRule.feature);
+        if (feat notin (s.selecter.num_feats + s.selecter.cat_feats)) {
+            throw featureNotSelected("The feature that should be monitored was not selected.");
         }
+        drifts += <feat, dRule.window, dRule.threshold>;
+    if (size(lRule) != 0) {
+        latency = lRule[0].ms;
+    }
     }
     return addToStore(s, monitorer(drifts, latency));
 }

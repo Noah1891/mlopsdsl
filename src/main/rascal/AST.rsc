@@ -18,7 +18,7 @@ data Eval(loc src=|unknown:///|) = stepEval(set[Threshold] thresholds);
 
 data Deploy(loc src=|unknown:///|) = stepDeploy(int port);
 
-data Monitor(loc src=|unknown:///|) = stepMonitor(set[MonitorRule] rules);
+data Monitor(loc src=|unknown:///|) = stepMonitor(set[DriftRule] dRules, list[LatencyRule] lRule);
 
 data DataSource(loc src=|unknown:///|) = srcCsv(StrLit path)
                 | srcDb(StrLit conn, StrLit query);
@@ -56,7 +56,8 @@ data Metric(loc src=|unknown:///|) = mAccuracy()
             | mRecall()
             | mF1();
 
-data MonitorRule(loc src=|unknown:///|) = ruleDrift(StrLit feature, int window, real threshold)
-                | ruleLatency(int ms);
+data DriftRule(loc src=|unknown:///|) = ruleDrift(StrLit feature, int window, real threshold);
+
+data LatencyRule(loc src=|unknown:///|) = ruleLatency(int ms);
 
 data StrLit(loc src = |unknown:///|) = strLit(str content);

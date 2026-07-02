@@ -138,7 +138,7 @@ TypeEnv evalDeploy(stepDeploy(int _), TypeEnv tenv) {
     return addToTypeEnv(tenv, deployType());
 }
 
-TypeEnv evalMonitor(stepMonitor(set[MonitorRule] _), TypeEnv tenv) {
+TypeEnv evalMonitor(stepMonitor(set[DriftRule] _, list[LatencyRule] _), TypeEnv tenv) {
     if (tenv.deployT == nothing()) {
         throw noTypeDefined("Deployment has no type.");
     }

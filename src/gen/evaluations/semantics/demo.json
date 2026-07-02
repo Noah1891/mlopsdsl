@@ -1,9 +1,13 @@
 {
+    "name": "demo",
     "loader": {
         "path": "data/irisRaw.csv",
         "y": "churn"
     },
-    "splitter": null,
+    "splitter": {
+        "train_ratio": 0.7,
+        "random_state": 42
+    },
     "selecter": {
         "num_feats": [
             "income",
@@ -40,22 +44,22 @@
             {
                 "transform": "scale",
                 "feature": "age",
-                "param": "label"
+                "param": "std"
             },
             {
                 "transform": "scale",
                 "feature": "income",
-                "param": "onehot"
+                "param": "minmax"
             },
             {
                 "transform": "scale",
                 "feature": "score",
-                "param": "label"
+                "param": "std"
             }
         ]
     },
     "modeler": {
-        "usesTrainSet": false,
+        "usesTrainSet": true,
         "modelType": "Random Forest",
         "params": {
             "criterion": "gini",
@@ -63,7 +67,10 @@
             "max_depth": "5"
         }
     },
-    "evaluator": null,
+    "evaluator": {
+        "Accuracy": 0.8,
+        "Precision": 0.9
+    },
     "deployer": {
         "port": 5000
     },
@@ -75,6 +82,6 @@
                 "threshold": 0.05
             }
         ],
-        "latency": 500
+        "latency": 400
     }
 }

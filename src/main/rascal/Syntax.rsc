@@ -21,7 +21,7 @@ syntax Eval = stepEval: "evaluation" "(" {Threshold ","}+ thresholds ")";
 
 syntax Deploy = stepDeploy: "deployment" "(" "port" "=" IntLit port ")";
 
-syntax Monitor = stepMonitor: "monitoring" "(" {MonitorRule ","}+ rules ")";
+syntax Monitor = stepMonitor: "monitoring" "(" {DriftRule ","}* dRules  ("," LatencyRule lRule)?")";
 
 syntax PrepTransform = prepFill: "fillna" "(" StrLit feature "," FillStrategy strategy ")"
   | prepEncode: "encode" "(" StrLit feature "," EncodingMethod method ")"
@@ -56,8 +56,9 @@ syntax Metric = mAccuracy: "accuracy"
                 | mRecall: "recall"
                 | mF1: "f1";
 
-syntax MonitorRule = ruleDrift: "drift" "(" "feature" "=" StrLit feature "," "window" "=" IntLit window ")" "\<=" FloatLit threshold
-                | ruleLatency: "latency" "\<=" IntLit ms;
+syntax DriftRule = ruleDrift: "drift" "(" "feature" "=" StrLit feature "," "window" "=" IntLit window ")" "\<=" FloatLit threshold;
+
+syntax LatencyRule = ruleLatency: "latency" "\<=" IntLit ms;
 
 syntax StrLit = strLit: "\"" StrContent content "\"";
   

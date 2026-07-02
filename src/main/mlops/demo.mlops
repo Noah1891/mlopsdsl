@@ -40,6 +40,7 @@ pipeline demo {
     ) 
 
     monitoring (
-        drift(feature = "age", window = 500) <= 0.05
+        drift(feature = "age", window = 500) <= 0.05,
+        latency <= 400
     )     
 }
