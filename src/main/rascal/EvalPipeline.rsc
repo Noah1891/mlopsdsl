@@ -14,6 +14,7 @@ import SemanticDomain;
 
 data RuntimeException 
     = invalidTrainSize(str cause)
+    | duplicateFieldSelection(str cause)
     | redundantFieldSelection(str cause)
     | resultSelectedAsFeature(str cause)
     | featureNotSelected(str cause)
@@ -81,8 +82,11 @@ MLOpsStore evalSplit(stepSplit(real train_size, list[int] random_state), MLOpsSt
     return addToStore(s, splitter(train_size, random_state[0]));
 }
 
-MLOpsStore evalSelect(stepSelect(set[StrLit] num_features, set[StrLit] cat_features), MLOpsStore s) {
-    if ((num_features & cat_features) != {}) {
+MLOpsStore evalSelect(stepSelect(list[StrLit] num_features, list[StrLit] cat_features), MLOpsStore s) {
+    if (size(num_features) != size(dup(num_features)) || size(cat_features) != size(dup(cat_features))) {
+        throw duplicateFieldSelection("Feature can only be selected once.");
+    }
+    if ((num_features & cat_features) != []) {
         throw redundantFieldSelection("Feature cannot be both numerical and categorical.");
     }
     num_feats = {};

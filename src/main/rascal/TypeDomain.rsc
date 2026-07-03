@@ -8,6 +8,7 @@ alias FeatureEnv = map[str, FeatureType];
 
 data TypeEnv  
     = typeEnv(
+        str name,
         LoadType loadT,
         Maybe[SplitType] splitT,
         SelectType selectT,
@@ -35,28 +36,27 @@ data DeployType  = deployType();
 
 data MonitorType = monitorType();
 
-TypeEnv initTypeEnv() = typeEnv(nullLoad(), nothing(), nullSelect(), nothing(), nullModel(), nothing(), nothing(), nothing(), ());
+TypeEnv initTypeEnv(str name) = typeEnv(name, nullLoad(), nothing(), nullSelect(), nothing(), nullModel(), nothing(), nothing(), nothing(), ());
 
-TypeEnv addToTypeEnv(TypeEnv tenv, LoadType l) = typeEnv(l, tenv.splitT, tenv.selectT, tenv.transT, tenv.modelT, tenv.evalT, tenv.deployT, tenv.monitorT, tenv.featEnv);
+TypeEnv addToTypeEnv(TypeEnv tenv, LoadType l) = typeEnv(tenv.name, l, tenv.splitT, tenv.selectT, tenv.transT, tenv.modelT, tenv.evalT, tenv.deployT, tenv.monitorT, tenv.featEnv);
 
-TypeEnv addToTypeEnv(TypeEnv tenv, SplitType sp) = typeEnv(tenv.loadT, just(sp), tenv.selectT, tenv.transT, tenv.modelT, tenv.evalT, tenv.deployT, tenv.monitorT, tenv.featEnv);
+TypeEnv addToTypeEnv(TypeEnv tenv, SplitType sp) = typeEnv(tenv.name, tenv.loadT, just(sp), tenv.selectT, tenv.transT, tenv.modelT, tenv.evalT, tenv.deployT, tenv.monitorT, tenv.featEnv);
 
-TypeEnv addToTypeEnv(TypeEnv tenv, SelectType se) = typeEnv(tenv.loadT, tenv.splitT, se, tenv.transT, tenv.modelT, tenv.evalT, tenv.deployT, tenv.monitorT, tenv.featEnv);
+TypeEnv addToTypeEnv(TypeEnv tenv, SelectType se) = typeEnv(tenv.name, tenv.loadT, tenv.splitT, se, tenv.transT, tenv.modelT, tenv.evalT, tenv.deployT, tenv.monitorT, tenv.featEnv);
 
-TypeEnv addToTypeEnv(TypeEnv tenv, TransType t) = typeEnv(tenv.loadT, tenv.splitT, tenv.selectT, just(t), tenv.modelT, tenv.evalT, tenv.deployT, tenv.monitorT, tenv.featEnv);
+TypeEnv addToTypeEnv(TypeEnv tenv, TransType t) = typeEnv(tenv.name, tenv.loadT, tenv.splitT, tenv.selectT, just(t), tenv.modelT, tenv.evalT, tenv.deployT, tenv.monitorT, tenv.featEnv);
 
-TypeEnv addToTypeEnv(TypeEnv tenv, ModelType m) = typeEnv(tenv.loadT, tenv.splitT, tenv.selectT, tenv.transT, m, tenv.evalT, tenv.deployT, tenv.monitorT, tenv.featEnv);
+TypeEnv addToTypeEnv(TypeEnv tenv, ModelType m) = typeEnv(tenv.name, tenv.loadT, tenv.splitT, tenv.selectT, tenv.transT, m, tenv.evalT, tenv.deployT, tenv.monitorT, tenv.featEnv);
 
-TypeEnv addToTypeEnv(TypeEnv tenv, EvalType e) = typeEnv(tenv.loadT, tenv.splitT, tenv.selectT, tenv.transT, tenv.modelT, just(e), tenv.deployT, tenv.monitorT, tenv.featEnv);
+TypeEnv addToTypeEnv(TypeEnv tenv, EvalType e) = typeEnv(tenv.name, tenv.loadT, tenv.splitT, tenv.selectT, tenv.transT, tenv.modelT, just(e), tenv.deployT, tenv.monitorT, tenv.featEnv);
 
-TypeEnv addToTypeEnv(TypeEnv tenv, DeployType d) = typeEnv(tenv.loadT, tenv.splitT, tenv.selectT, tenv.transT, tenv.modelT, tenv.evalT, just(d), tenv.monitorT, tenv.featEnv);
+TypeEnv addToTypeEnv(TypeEnv tenv, DeployType d) = typeEnv(tenv.name, tenv.loadT, tenv.splitT, tenv.selectT, tenv.transT, tenv.modelT, tenv.evalT, just(d), tenv.monitorT, tenv.featEnv);
 
-TypeEnv addToTypeEnv(TypeEnv tenv, MonitorType mo) = typeEnv(tenv.loadT, tenv.splitT, tenv.selectT, tenv.transT, tenv.modelT, tenv.evalT, tenv.deployT, just(mo), tenv.featEnv);
-
-TypeEnv addToTypeEnv(TypeEnv tenv, FeatureEnv fenv) = typeEnv(tenv.loadT, tenv.splitT, tenv.selectT, tenv.transT, tenv.modelT, tenv.evalT, tenv.deployT, tenv.monitorT, fenv);
+TypeEnv addToTypeEnv(TypeEnv tenv, MonitorType mo) = typeEnv(tenv.name, tenv.loadT, tenv.splitT, tenv.selectT, tenv.transT, tenv.modelT, tenv.evalT, tenv.deployT, just(mo), tenv.featEnv);
 
 str typeEnvToJson(TypeEnv tenv) {
     str json = "{";
+    json += "\"name\": \"<tenv.name>\",";
     json += "\"load\": " + isNotNull(tenv.loadT) + ",";
     json += "\"split\": " + maybePresent(tenv.splitT) + ",";
     json += "\"select\": " + isNotNull(tenv.selectT) + ",";

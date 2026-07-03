@@ -8,7 +8,7 @@ data Load(loc src=|unknown:///|) = stepLoad(StrLit path, StrLit y);
 
 data Split(loc src=|unknown:///|) = stepSplit(real train_size, list[int] random_state);
 
-data Select(loc src=|unknown:///|) = stepSelect(set[StrLit] num_features, set[StrLit] cat_features);
+data Select(loc src=|unknown:///|) = stepSelect(list[StrLit] num_features, list[StrLit] cat_features);
 
 data Trans(loc src=|unknown:///|) = stepTrans(list[PrepTransform] transforms);
 

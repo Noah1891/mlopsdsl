@@ -21,8 +21,8 @@ TypeEnv evalPipeline(Syntax::Pipeline pipeline) {
     return evalPipeline(pipelineAST);
 }
 
-TypeEnv evalPipeline(pipeline(str _, Steps steps)) {
-    return evalSteps(steps, initTypeEnv());
+TypeEnv evalPipeline(pipeline(str name, Steps steps)) {
+    return evalSteps(steps, initTypeEnv(name));
 }
 
 TypeEnv evalSteps(steps(Load load, list[Split] split, Select select, list[Trans] trans, Model model, list[Eval] eval, list[Deploy] deploy, list[Monitor] monitor), TypeEnv tenv) {
@@ -60,21 +60,19 @@ TypeEnv evalSplit(stepSplit(real _, list[int] _), TypeEnv tenv) {
     return addToTypeEnv(tenv, splitType());
 }
 
-TypeEnv evalSelect(stepSelect(set[StrLit] num_features, set[StrLit] cat_features), TypeEnv tenv) {
-    FeatureEnv fenv = evalFeatures(num_features, cat_features);
-    tenv = addToTypeEnv(tenv, fenv);
-    return addToTypeEnv(tenv, selectType());
+TypeEnv evalSelect(stepSelect(list[StrLit] num_features, list[StrLit] cat_features), TypeEnv tenv) {
+    TypeEnv tenv1 = evalFeatures(num_features, cat_features, tenv);
+    return addToTypeEnv(tenv1, selectType());
 }
 
-FeatureEnv evalFeatures(set[StrLit] num_features, set[StrLit] cat_features) {
-    FeatureEnv fenv = ();
+TypeEnv evalFeatures(list[StrLit] num_features, list[StrLit] cat_features, TypeEnv tenv) {
     for (num_feat <- num_features, strLit(str s) := num_feat) {
-        fenv[s] = numerical();
+        tenv.featEnv[s] = numerical();
     }
     for (cat_feat <- cat_features, strLit(str s) := cat_feat) {
-        fenv[s] = categorical();
+        tenv.featEnv[s] = categorical();
     }
-    return fenv;
+    return tenv;
 }
 
 TypeEnv evalTrans(stepTrans(list[PrepTransform] transforms), TypeEnv tenv) {
