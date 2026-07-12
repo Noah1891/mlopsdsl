@@ -8,7 +8,7 @@ import IO;
 import String;
 
 import Syntax;
-import EvalPipeline;
+import Interpreter;
 import TypeEval;
 import SemanticDomain;
 import TypeDomain;
@@ -31,10 +31,10 @@ lrel[loc,Command] pipelineCodeLenseService(start[Pipeline] input)
       <input.src, runTypeCheckPipeline(input, title="Typecheck MLOps pipeline")>];
 
 value pipelineExecutionService(runEvalPipeline(start[Pipeline] input)) {
-    MLOpsStore store = EvalPipeline::evalPipeline(input.top);
-    outputFile = |project://mlopsdsl/src/gen/evaluations/semantics/<getFileName(input.src)>.json|; 
-    writeFile(outputFile, storeToJson(store));
-    edit(outputFile);
+    MLOpsStore store = Interpreter::evalPipeline(input.top);
+    //outputFile = |project://mlopsdsl/src/gen/evaluations/semantics/<getFileName(input.src)>.json|; 
+    //writeFile(outputFile, storeToJson(store));
+    //edit(outputFile);
     return ("result": true);
 }
 

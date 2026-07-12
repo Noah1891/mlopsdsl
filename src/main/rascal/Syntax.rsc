@@ -5,19 +5,19 @@ lexical WhitespaceAndComment = [\ \t\n\r] | @category="Comment" "#" ![\n]* $;
 
 start syntax Pipeline = pipeline: "pipeline" Id name "{" Steps steps "}";
 
-syntax Steps = steps: Load load Split? split Select select Trans? trans Model model Eval? eval Deploy? deploy Monitor? monitor; 
+syntax Steps = steps: Load load Split? split Select? select Trans? trans Model model Eval? eval Deploy? deploy Monitor? monitor; 
 
 syntax Load = stepLoad: "load" "(" "path" "=" StrLit path "," "y" "=" StrLit y ")";
 
 syntax Split = stepSplit: "split" "(" "train_size" "=" FloatLit "," ("random_state" "=" IntLit)? ")";
 
-syntax Select = stepSelect: "select" "(" "num_features" "=" "[" { StrLit ","}* num_features "]" "," "cat_features" "=" "[" {StrLit ","}* cat_features "]" ")";
+syntax Select = stepSelect: "select" "(" "features" "=" "[" { StrLit ","}+ features "]" ")";
 
 syntax Trans = stepTrans: "transformation" "(" {PrepTransform ","}+ transforms ")";
 
 syntax Model = stepModel: "model" ModelExpr expr;
 
-syntax Eval = stepEval: "evaluation" "(" {Threshold ","}+ thresholds ")";
+syntax Eval = stepEval: "evaluation" "(" {Metric ","}+ metrics ")";
 
 syntax Deploy = stepDeploy: "deployment" "(" "port" "=" IntLit port ")";
 
@@ -49,12 +49,12 @@ syntax Lit = intLit: IntLit
           | floatLit: FloatLit 
           | strLit: StrLit;
 
-syntax Threshold = threshold: Metric metric "=" FloatLit val;
-
 syntax Metric = mAccuracy: "accuracy"
                 | mPrecision: "precision"
                 | mRecall: "recall"
-                | mF1: "f1";
+                | mF1: "f1"
+                | mMSE: "mse"
+                | mRMSE: "rmse";
 
 syntax DriftRule = ruleDrift: "drift" "(" "feature" "=" StrLit feature "," "window" "=" IntLit window ")" "\<=" FloatLit threshold;
 

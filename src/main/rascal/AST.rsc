@@ -2,19 +2,19 @@ module AST
 
 data Pipeline(loc src=|unknown:///|) = pipeline(str name, Steps steps);
 
-data Steps = steps(Load load, list[Split] split, Select select, list[Trans] trans, Model model, list[Eval] eval, list[Deploy] deploy, list[Monitor] monitor);
+data Steps = steps(Load load, list[Split] split, list[Select] select, list[Trans] trans, Model model, list[Eval] eval, list[Deploy] deploy, list[Monitor] monitor);
 
 data Load(loc src=|unknown:///|) = stepLoad(StrLit path, StrLit y);
 
-data Split(loc src=|unknown:///|) = stepSplit(real train_size, list[int] random_state);
+data Split(loc src=|unknown:///|) = stepSplit(real trainSize, list[int] randomState);
 
-data Select(loc src=|unknown:///|) = stepSelect(list[StrLit] num_features, list[StrLit] cat_features);
+data Select(loc src=|unknown:///|) = stepSelect(list[StrLit] features);
 
 data Trans(loc src=|unknown:///|) = stepTrans(list[PrepTransform] transforms);
 
 data Model(loc src=|unknown:///|) = stepModel(ModelExpr expr);
 
-data Eval(loc src=|unknown:///|) = stepEval(set[Threshold] thresholds);
+data Eval(loc src=|unknown:///|) = stepEval(set[Metric] metrics);
 
 data Deploy(loc src=|unknown:///|) = stepDeploy(int port);
 
@@ -49,12 +49,12 @@ data Lit(loc src=|unknown:///|) = intLit(int intVal)
          | floatLit(real floatVal)
          | strLit(StrLit strVal);
 
-data Threshold(loc src=|unknown:///|) = threshold(Metric metric, real val);
-
 data Metric(loc src=|unknown:///|) = mAccuracy()
             | mPrecision()
             | mRecall()
-            | mF1();
+            | mF1()
+            | mMSE()
+            | mRMSE();
 
 data DriftRule(loc src=|unknown:///|) = ruleDrift(StrLit feature, int window, real threshold);
 
