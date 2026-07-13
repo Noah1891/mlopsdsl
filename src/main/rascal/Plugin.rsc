@@ -32,24 +32,21 @@ lrel[loc,Command] pipelineCodeLenseService(start[Pipeline] input)
 
 value pipelineExecutionService(runEvalPipeline(start[Pipeline] input)) {
     MLOpsStore store = Interpreter::evalPipeline(input.top);
-    //outputFile = |project://mlopsdsl/src/gen/evaluations/semantics/<getFileName(input.src)>.json|; 
-    //writeFile(outputFile, storeToJson(store));
-    //edit(outputFile);
     return ("result": true);
 }
 
 value pipelineExecutionService(runTypeCheckPipeline(start[Pipeline] input)) {
-    TypeEnv env = TypeEval::evalPipeline(input.top);
+    /* TypeEnv env = TypeEval::evalPipeline(input.top);
     outputFile = |project://mlopsdsl/src/gen/evaluations/typing/<getFileName(input.src)>.json|; 
     writeFile(outputFile, typeEnvToJson(env));
-    edit(outputFile);
+    edit(outputFile); */
     return ("result": true);
 }
 
 void main() {
     registerLanguage( 
         language( 
-            pathConfig(srcs=[|project://mlopsdsl/src/main/rascal|]), 
+            pathConfig(srcs=[|project://mlopsdsl/src/main/rascal|, |project://mlopsdsl/src/main/python|]), 
             "MLOps", 
             {"mlops"}, 
             "Plugin",  

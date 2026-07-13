@@ -204,16 +204,23 @@ def main():
 
                 typed_params = {}
                 for k, v in hyperparams.items():
-                    if v.isdigit(): typed_params[k] = int(v)
-                    elif v.replace('.','',1).isdigit(): typed_params[k] = float(v)
-                    else: typed_params[k] = v
+                    if v in ("true", "false"):
+                        typed_params[k] = (v == "true")
+                        continue
+                    try:
+                        typed_params[k] = int(v)
+                    except ValueError:
+                        try:
+                            typed_params[k] = float(v)
+                        except ValueError:
+                            typed_params[k] = v
 
                 model = ALGORITHMS[algo](**typed_params)
                 model.fit(context["X_train"], context["y_train"])
                 context["model"] = model
                 
                 os.makedirs(model_dir, exist_ok=True)
-                model_path = os.path.join(model_dir, f"models/{algo}_model.pkl")
+                model_path = os.path.join(model_dir, f"{algo}_model.pkl")
                 deployment_artifact = {
                     "model": context["model"],
                     "transformers": context["transformers"]

@@ -4,7 +4,7 @@ data Pipeline(loc src=|unknown:///|) = pipeline(str name, Steps steps);
 
 data Steps = steps(Load load, list[Split] split, list[Select] select, list[Trans] trans, Model model, list[Eval] eval, list[Deploy] deploy, list[Monitor] monitor);
 
-data Load(loc src=|unknown:///|) = stepLoad(StrLit path, StrLit y);
+data Load(loc src=|unknown:///|) = stepLoad(StrLit path, StrLit target);
 
 data Split(loc src=|unknown:///|) = stepSplit(real trainSize, list[int] randomState);
 
@@ -47,7 +47,8 @@ data Param(loc src=|unknown:///|) = hp(str name, Lit val);
 
 data Lit(loc src=|unknown:///|) = intLit(int intVal)
          | floatLit(real floatVal)
-         | strLit(StrLit strVal);
+         | strLit(StrLit strVal)
+         | boolLit(bool boolVal);
 
 data Metric(loc src=|unknown:///|) = mAccuracy()
             | mPrecision()

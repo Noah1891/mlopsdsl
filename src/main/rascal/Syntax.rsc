@@ -7,7 +7,7 @@ start syntax Pipeline = pipeline: "pipeline" Id name "{" Steps steps "}";
 
 syntax Steps = steps: Load load Split? split Select? select Trans? trans Model model Eval? eval Deploy? deploy Monitor? monitor; 
 
-syntax Load = stepLoad: "load" "(" "path" "=" StrLit path "," "y" "=" StrLit y ")";
+syntax Load = stepLoad: "load" "(" "path" "=" StrLit path "," "target" "=" StrLit target ")";
 
 syntax Split = stepSplit: "split" "(" "train_size" "=" FloatLit "," ("random_state" "=" IntLit)? ")";
 
@@ -47,7 +47,8 @@ syntax Param = hp: Id name "=" Lit val;
 
 syntax Lit = intLit: IntLit 
           | floatLit: FloatLit 
-          | strLit: StrLit;
+          | strLit: StrLit
+          | boolLit: BoolLit;
 
 syntax Metric = mAccuracy: "accuracy"
                 | mPrecision: "precision"
@@ -65,15 +66,16 @@ syntax StrLit = strLit: "\"" StrContent content "\"";
 lexical Id = [a-zA-Z_][a-zA-Z0-9_]* !>> [a-zA-Z0-9_] \ Keywords;
 lexical IntLit   = [0-9]+;
 lexical FloatLit = [0-9]+ "." [0-9]+;
+lexical BoolLit = "true" | "false";
 lexical StrContent = ![\"]*;
 
 keyword Keywords
   = "pipeline" 
-  | "load" | "csv" | "db"
+  | "load" | "path" | "target"
   | "split" | "ratio" | "random_state"
-  | "select" | "num_features" | "cat_features"
-  | "transformation" | "fillna" | "encode" | "scale"
-  | "model" | "LinReg" | "RandomForest" | "NN"
-  | "evaluation" | "accuracy" | "precision" | "recall" | "f1"
-  | "deployment"
-  | "monitoring" | "drift" | "latency";
+  | "select" | "features"
+  | "transformation" | "fillna" | "encode" | "scale" | "mean" | "median" | "mode" | "onehot" | "label" | "std" | "minmax" 
+  | "model" | "LinReg" | "RandomForest" | "LogReg"
+  | "evaluation" | "accuracy" | "precision" | "recall" | "f1" | "mse" | "rmse"
+  | "deployment" | "port"
+  | "monitoring" | "drift" | "feature" | "window" | "latency";

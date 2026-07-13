@@ -1,4 +1,4 @@
 Manifest-Version: 0.0.1
 Project-Name: mlopsdsl
-Source: src/main/rascal
+Source: src/main/rascal, src/main/python
 

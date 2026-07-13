@@ -1,7 +1,7 @@
 pipeline demo {
     load (
         path = "data/Titanic-Dataset.csv",
-        y = "Survived"
+        target = "Survived"
     )
 
     split (

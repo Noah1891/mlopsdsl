@@ -9,6 +9,8 @@ import ListRelation;
 import Set;
 import util::ShellExec;
 import IO;
+import util::IDEServices;
+import Message;
 
 import Syntax;
 import AST;
@@ -62,23 +64,21 @@ MLOpsStore evalSteps(steps(Load load, list[Split] split, list[Select] select, li
     return s;
 }
 
-MLOpsStore evalLoad(stepLoad(StrLit path, StrLit y), MLOpsStore s, PID pid) {
+MLOpsStore evalLoad(Load l:stepLoad(StrLit path, StrLit target), MLOpsStore s, PID pid) {
     str p = evalStrLit(path);
     str absolutePath = resolveLocation(|project://mlopsdsl| + p).path;
-    str target = evalStrLit(y);
-    PythonCmd cmd = loadCmd("LOAD", absolutePath, target);
+    str targetAsStr = evalStrLit(target);
+    PythonCmd cmd = loadCmd("LOAD", absolutePath, targetAsStr);
     PythonResponse res = sendJsonToPython(pid, cmd);
-    if (res.status == "ERROR") {
-        throw "Error: <res.message>";
-    }
-    return store(dataLoaded(), target, s.trainedModelPath);
+    reportResult(res, "LOAD", l.src);
+    return store(dataLoaded(), targetAsStr, s.trainedModelPath);
 }
 
 str evalStrLit(strLit(str s)) {
     return s;
 }
 
-MLOpsStore evalSplit(stepSplit(real trainSize, list[int] randomState), MLOpsStore s, PID pid) {
+MLOpsStore evalSplit(Split sp:stepSplit(real trainSize, list[int] randomState), MLOpsStore s, PID pid) {
     if (trainSize <= 0) {
         throw invalidTrainSize("Train size is below 0.0");
     }
@@ -92,13 +92,11 @@ MLOpsStore evalSplit(stepSplit(real trainSize, list[int] randomState), MLOpsStor
     }
     PythonCmd cmd = splitCmd("SPLIT", ratioStr, randomStateStr);
     PythonResponse res = sendJsonToPython(pid, cmd);
-    if (res.status == "ERROR") {
-        throw "Error: <res.message>";
-    }
+    reportResult(res, "SPLIT", sp.src);
     return store(dataSplitted(), s.targetVariable, s.trainedModelPath);
 }
 
-MLOpsStore evalSelect(stepSelect(list[StrLit] features), MLOpsStore s, PID pid) {
+MLOpsStore evalSelect(Select se:stepSelect(list[StrLit] features), MLOpsStore s, PID pid) {
     if (size(features) != size(dup(features))) {
         throw duplicateFieldSelection("Feature can only be selected once.");
     }
@@ -111,13 +109,11 @@ MLOpsStore evalSelect(stepSelect(list[StrLit] features), MLOpsStore s, PID pid) 
     }
     PythonCmd cmd = selectCmd("SELECT", strFeatures);
     PythonResponse res = sendJsonToPython(pid, cmd);
-    if (res.status == "ERROR") {
-        throw "Error: <res.message>";
-    }
+    reportResult(res, "SELECT", se.src);
     return store(featureSelected(), s.targetVariable, s.trainedModelPath);
 }
 
-MLOpsStore evalTrans(stepTrans(list[PrepTransform] transforms), MLOpsStore s, PID pid) {
+MLOpsStore evalTrans(Trans t:stepTrans(list[PrepTransform] transforms), MLOpsStore s, PID pid) {
     lrel[str tr, str feat, str param] trans = [];
     for (PrepTransform pt <- transforms) {
         tuple[str tr, str feat, str param] ptrans = evalPrepTransform(pt);
@@ -136,9 +132,7 @@ MLOpsStore evalTrans(stepTrans(list[PrepTransform] transforms), MLOpsStore s, PI
     for (tuple[str tr, str feat, str param] ptrans <- trans) {
         PythonCmd cmd = transformCmd("TRANSFORM", ptrans.tr, ptrans.feat, ptrans.param);
         PythonResponse res = sendJsonToPython(pid, cmd);
-        if (res.status == "ERROR") {
-            throw "Error: <res.message>";
-        }
+        reportResult(res, "TRANSFORM", t.src);
     }
     return store(transformed(), s.targetVariable, s.trainedModelPath);
 }
@@ -189,7 +183,7 @@ str evalScaleMethod(scaleStd()) {
     return "std";
 }
 
-MLOpsStore evalModel(stepModel(modelTrain(Algorithm algo, set[Param] hyperParams)), MLOpsStore s, PID pid) {
+MLOpsStore evalModel(Model m:stepModel(modelTrain(Algorithm algo, set[Param] hyperParams)), MLOpsStore s, PID pid) {
     str algo_as_string = evalAlgo(algo);
     map[str, str] params = (); 
     for (Param hyperParam <- hyperParams) {
@@ -199,9 +193,7 @@ MLOpsStore evalModel(stepModel(modelTrain(Algorithm algo, set[Param] hyperParams
     str modelDir = resolveLocation(|project://mlopsdsl| + "models").path;
     PythonCmd cmd = trainCmd("TRAIN", algo_as_string, params, modelDir);
     PythonResponse res = sendJsonToPython(pid, cmd);
-    if (res.status == "ERROR") {
-        throw "Error: <res.message>";
-    }
+    reportResult(res, "TRAIN", m.src);
     return store(modelTrained(), s.targetVariable, res.modelPath);
 }
 
@@ -234,14 +226,16 @@ str evalLit(strLit(StrLit s)) {
     return evalStrLit(s);
 }
 
-MLOpsStore evalEval(stepEval(set[Metric] metrics), MLOpsStore s, PID pid) {
+str evalLit(boolLit(bool b)) {
+    return "<b>";
+}
+
+MLOpsStore evalEval(Eval e:stepEval(set[Metric] metrics), MLOpsStore s, PID pid) {
     for (Metric metric <- metrics) {
         metric_as_str = evalMetric(metric);
         PythonCmd cmd = evalCmd("EVAL", metric_as_str);
         PythonResponse res = sendJsonToPython(pid, cmd);
-        if (res.status == "ERROR") {
-            throw "Error: <res.message>";
-        }
+        reportResult(res, "EVAL", e.src);
     }
     return store(modelEvaluated(), s.targetVariable, s.trainedModelPath);
 }
@@ -278,4 +272,11 @@ MLOpsStore evalDeploy(stepDeploy(int port), MLOpsStore s) {
 MLOpsStore evalMonitor(stepMonitor(set[DriftRule] dRules, list[LatencyRule] lRule), MLOpsStore s) {
     // TODO
     return s;
+}
+
+void reportResult(PythonResponse res, str step, loc l) {
+    if (res.status == "ERROR") {
+        throw "Error: <res.message>";
+    }
+    showMessage(info("[<step>] <res.message>", l));
 }
