@@ -66,7 +66,7 @@ MLOpsStore evalSteps(steps(Load load, list[Split] split, list[Select] select, li
 
 MLOpsStore evalLoad(Load l:stepLoad(StrLit path, StrLit target), MLOpsStore s, PID pid) {
     str p = evalStrLit(path);
-    str absolutePath = resolveLocation(|project://mlopsdsl| + p).path;
+    str absolutePath = (l.src.parent + p).path;
     str targetAsStr = evalStrLit(target);
     PythonCmd cmd = loadCmd("LOAD", absolutePath, targetAsStr);
     PythonResponse res = sendJsonToPython(pid, cmd);

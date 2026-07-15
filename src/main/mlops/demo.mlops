@@ -1,6 +1,6 @@
 pipeline demo {
     load (
-        path = "data/Titanic-Dataset.csv",
+        path = "../../../data/Titanic-Dataset.csv",
         target = "Survived"
     )
 
