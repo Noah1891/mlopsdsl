@@ -105,7 +105,7 @@ MLOpsStore evalSelect(Select se:stepSelect(list[StrLit] features), MLOpsStore s,
         strFeatures += evalStrLit(feature);
     }
     if (s.targetVariable in strFeatures) {
-        throw resultSelectedAsFeature("The result column cannot be a feature.");
+        throw resultSelectedAsFeature("The target column cannot be a feature.");
     }
     PythonCmd cmd = selectCmd("SELECT", strFeatures);
     PythonResponse res = sendJsonToPython(pid, cmd);

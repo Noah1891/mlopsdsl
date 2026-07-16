@@ -9,9 +9,7 @@ import String;
 
 import Syntax;
 import Interpreter;
-import TypeEval;
 import SemanticDomain;
-import TypeDomain;
 import Generator;
 
 start[Pipeline] pipelineParsingService(str s, loc l) =
@@ -23,23 +21,13 @@ set[LanguageService] pipelineLanguageServices() = {
     execution(pipelineExecutionService)
 };
 
-data Command = runEvalPipeline(start[Pipeline] pipeline)
-             | runTypeCheckPipeline(start[Pipeline] pipeline);
+data Command = runPipeline(start[Pipeline] pipeline);
 
 lrel[loc,Command] pipelineCodeLenseService(start[Pipeline] input)
-    =[<input.src, runEvalPipeline(input, title="Evaluate MLOps pipeline")>,
-      <input.src, runTypeCheckPipeline(input, title="Typecheck MLOps pipeline")>];
+    =[<input.src, runPipeline(input, title="Run MLOps pipeline")>];
 
-value pipelineExecutionService(runEvalPipeline(start[Pipeline] input)) {
+value pipelineExecutionService(runPipeline(start[Pipeline] input)) {
     MLOpsStore store = Interpreter::evalPipeline(input.top);
-    return ("result": true);
-}
-
-value pipelineExecutionService(runTypeCheckPipeline(start[Pipeline] input)) {
-    /* TypeEnv env = TypeEval::evalPipeline(input.top);
-    outputFile = |project://mlopsdsl/src/gen/evaluations/typing/<getFileName(input.src)>.json|; 
-    writeFile(outputFile, typeEnvToJson(env));
-    edit(outputFile); */
     return ("result": true);
 }
 

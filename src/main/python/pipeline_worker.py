@@ -76,6 +76,10 @@ def main():
                     continue
                     
                 context["df"] = pd.read_csv(path)
+
+                if context["target"] not in context["df"].columns:
+                    send_response("ERROR", f"Specified target {context["target"]} is not a column in loaded CSV.")
+                
                 send_response("SUCCESS", f"CSV loaded successfully. Form: {context['df'].shape}")
             
             elif cmd == "SPLIT":
