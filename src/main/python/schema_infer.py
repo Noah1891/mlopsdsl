@@ -19,7 +19,7 @@ def main():
     for col in df.columns:
         columns[col] = {
             "type": infer_type(df[col]),
-            "row_count": df[col].count,
+            "rowCount": int(df[col].count()),
             "cardinality": int(df[col].nunique(dropna=True))
         }
     print(json.dumps({"columns": columns}))

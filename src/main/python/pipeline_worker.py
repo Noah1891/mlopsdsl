@@ -17,7 +17,9 @@ context = {
     "X_test": None,
     "y_train": None,
     "y_test": None,
+    "selected_features": [],
     "transformers": {},
+    "transform_log": [],
     "model": None,
     "metrics": {}
 }
@@ -47,12 +49,13 @@ METRICS = {
     "rmse": root_mean_squared_error
 }
 
-def send_response(status, message, model_path=""):
+def send_response(status, message, model_path="", code=0):
     """Helper function, thath produces JSON in the Rascal Response-ADT format"""
     res = {
         "status": status,
         "message": message,
-        "modelPath": model_path
+        "modelPath": model_path,
+        "code": code
     }
     print(json.dumps(res))
     sys.stdout.flush()
@@ -72,13 +75,13 @@ def main():
                 context["target"] = request["target"]
                 
                 if not os.path.exists(path):
-                    send_response("ERROR", f"File not found: {path}")
+                    send_response("ERROR", f"File not found: {path}", code=1)
                     continue
                     
                 context["df"] = pd.read_csv(path)
 
                 if context["target"] not in context["df"].columns:
-                    send_response("ERROR", f"Specified target {context["target"]} is not a column in loaded CSV.")
+                    send_response("ERROR", f"Specified target {context['target']} is not a column in loaded CSV.", code=2)
                 
                 send_response("SUCCESS", f"CSV loaded successfully. Form: {context['df'].shape}")
             
@@ -109,7 +112,7 @@ def main():
                 if context["X_train"] is not None:
                     missing = [f for f in selected_features if f not in context["X_train"].columns]
                     if missing:
-                        send_response("ERROR", f"Columns not found in Dataframe: {missing}")
+                        send_response("ERROR", f"Columns not found in Dataframe: {missing}", code=3)
                         continue
                 
                     context["X_train"] = context["X_train"][selected_features]
@@ -122,7 +125,7 @@ def main():
 
                     missing = [f for f in selected_features if f not in context["df"].columns]
                     if missing:
-                        send_response("ERROR", f"Columns not found in Dataframe: {missing}")
+                        send_response("ERROR", f"Columns not found in Dataframe: {missing}", code=3)
                         continue
             
                     context["df"] = context["df"][selected_features]
@@ -133,22 +136,23 @@ def main():
                 action = request["action"]
                 feature = request["feature"]
                 method = request["method"]
+
+                context["transform_log"] += [(action, feature)]
                 
                 working_on_split = context["X_train"] is not None
-
                 
                 if action == "scale":
                     scaler = SCALERS[method]()
                     if working_on_split:
                         if feature not in context["X_train"].columns:
-                            send_response("ERROR", f"Column not found in Dataframe: {feature}")
+                            send_response("ERROR", f"Column not found in Dataframe: {feature}", code=3)
                             continue
                         context["X_train"][[feature]] = scaler.fit_transform(context["X_train"][[feature]])
                         context["X_test"][[feature]] = scaler.transform(context["X_test"][[feature]])
                         context["transformers"][f"scaler_{feature}"] = scaler
                     else:
                         if feature not in context["df"].columns:
-                            send_response("ERROR", f"Column not found in Dataframe: {feature}")
+                            send_response("ERROR", f"Column not found in Dataframe: {feature}", code=3)
                             continue
                         context["df"][[feature]] = scaler.fit_transform(context["df"][[feature]])
                         context["transformers"][f"scaler_{feature}"] = scaler
@@ -156,10 +160,16 @@ def main():
                 elif action == "fillna":
                     imputer = SimpleImputer(strategy=method)
                     if working_on_split:
+                        if feature not in context["X_train"].columns:
+                            send_response("ERROR", f"Column not found in Dataframe: {feature}", code=3)
+                            continue
                         context["X_train"][[feature]] = imputer.fit_transform(context["X_train"][[feature]])
                         context["X_test"][[feature]] = imputer.transform(context["X_test"][[feature]])
                         context["transformers"][f"imputer_{feature}"] = imputer
                     else:
+                        if feature not in context["df"].columns:
+                            send_response("ERROR", f"Column not found in Dataframe: {feature}", code=3)
+                            continue
                         context["df"][[feature]] = imputer.fit_transform(context["df"][[feature]])
                         context["transformers"][f"imputer_{feature}"] = imputer
                         
@@ -167,6 +177,9 @@ def main():
                     if method == "onehot":
                         ohe = OneHotEncoder(handle_unknown='ignore', sparse_output=False)
                         if working_on_split:
+                            if feature not in context["X_train"].columns:
+                                send_response("ERROR", f"Column not found in Dataframe: {feature}", code=3)
+                                continue
                             train_encoded = ohe.fit_transform(context["X_train"][[feature]])
                             test_encoded = ohe.transform(context["X_test"][[feature]])                         
                             new_cols = ohe.get_feature_names_out([feature])                          
@@ -176,6 +189,9 @@ def main():
                             context["X_test"] = pd.concat([context["X_test"].drop(columns=[feature]), test_df_encoded], axis=1)
                             context["transformers"][f"encoder_{feature}"] = ohe
                         else:
+                            if feature not in context["df"].columns:
+                                send_response("ERROR", f"Column not found in Dataframe: {feature}", code=3)
+                                continue
                             df_encoded = ohe.fit_transform(context["df"][[feature]])
                             new_cols = ohe.get_feature_names_out([feature])                        
                             df_encoded_pandas = pd.DataFrame(df_encoded, columns=new_cols, index=context["df"].index)                           
@@ -184,10 +200,16 @@ def main():
                     else: #label
                         le = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
                         if working_on_split:
+                            if feature not in context["X_train"].columns:
+                                send_response("ERROR", f"Column not found in Dataframe: {feature}", code=3)
+                                continue
                             context["X_train"][[feature]] = le.fit_transform(context["X_train"][[feature]])
                             context["X_test"][[feature]] = le.transform(context["X_test"][[feature]])
                             context["transformers"][f"encoder_{feature}"] = le
                         else:
+                            if feature not in context["df"].columns:
+                                send_response("ERROR", f"Column not found in Dataframe: {feature}", code=3)
+                                continue
                             context["df"][[feature]] = le.fit_transform(context["df"][[feature]])
                             context["transformers"][f"encoder_{feature}"] = le 
                 send_response("SUCCESS", f"Transformation {action}({method}) applied to {feature}.")
@@ -219,8 +241,16 @@ def main():
                         except ValueError:
                             typed_params[k] = v
 
-                model = ALGORITHMS[algo](**typed_params)
-                model.fit(context["X_train"], context["y_train"])
+                try:
+                    model = ALGORITHMS[algo](**typed_params)
+                except TypeError:
+                    send_response("ERROR", f"Hyperparameter included unexpected keyword.")
+                    continue
+                try:
+                    model.fit(context["X_train"], context["y_train"])
+                except ValueError:
+                    send_response("ERROR", f"Hyperparameter has wrong type.")
+                    continue
                 context["model"] = model
                 
                 os.makedirs(model_dir, exist_ok=True)

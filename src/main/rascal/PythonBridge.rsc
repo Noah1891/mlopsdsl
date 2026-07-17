@@ -15,7 +15,7 @@ data PythonCmd
   ;
 
 data PythonResponse
-  = response(str status, str message, str modelPath)
+  = response(str status, str message, str modelPath, int code)
   ;
 
 PID startPythonWorker() {

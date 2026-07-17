@@ -9,7 +9,7 @@ import String;
 
 import Syntax;
 import Interpreter;
-import SemanticDomain;
+import TypeSystem;
 import Generator;
 
 start[Pipeline] pipelineParsingService(str s, loc l) =
@@ -21,13 +21,20 @@ set[LanguageService] pipelineLanguageServices() = {
     execution(pipelineExecutionService)
 };
 
-data Command = runPipeline(start[Pipeline] pipeline);
+data Command = runPipeline(start[Pipeline] pipeline)
+             | typecheckPipeline(start[Pipeline] pipeline);
 
 lrel[loc,Command] pipelineCodeLenseService(start[Pipeline] input)
-    =[<input.src, runPipeline(input, title="Run MLOps pipeline")>];
+    =[<input.src, runPipeline(input, title="Run MLOps pipeline")>,
+    <input.src, typecheckPipeline(input, title="Typecheck MLOps pipeline")>];
 
 value pipelineExecutionService(runPipeline(start[Pipeline] input)) {
     MLOpsStore store = Interpreter::evalPipeline(input.top);
+    return ("result": true);
+}
+
+value pipelineExecutionService(typecheckPipeline(start[Pipeline] input)) {
+    TypeStore store = TypeSystem::checkPipeline(input.top);
     return ("result": true);
 }
 

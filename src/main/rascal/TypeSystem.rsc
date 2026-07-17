@@ -7,9 +7,60 @@ import Set;
 import Map;
 import util::ShellExec;
 import lang::json::IO;
+import ParseTree;
+import util::IDEServices;
 
 import AST;
-import TypeDomain;
+import Syntax;
+
+data ColumnType
+    = tNumeric()
+    | tCategorical()
+    | tBoolean()
+    | tUnknown()
+    ;
+
+data ColumnInfo = colInfo(ColumnType ctype, int rowCount, int cardinality);
+
+alias Schema = map[str featName, ColumnInfo info];
+
+data TypeStore = tStore(str target, Schema schema, Task task);
+
+data Task = classification() | regression() | null();
+
+data ParamType
+    = ptInt()
+    | ptFloat()
+    | ptBool()
+    | ptEnum(set[str] allowed)
+    ;
+
+alias ParamSignature = map[str name, ParamType ptype];
+
+data ColumnInfoJson = columnInfoJson(str \type, int rowCount, int cardinality);
+data SchemaJson = schemaJson(map[str, ColumnInfoJson] columns);
+
+int CLASSIFICATION_CARDINALITY_THRESHOLD = 20;
+
+map[Algorithm, ParamSignature] ALGO_SIGNATURES = (
+    AST::algoLR(): (
+        "fit_intercept": ptBool(),
+        "positive": ptBool()
+    ),
+    AST::algoRF(): (
+        "n_estimators": ptInt(),
+        "max_depth": ptInt(),
+        "criterion": ptEnum({"gini", "entropy", "log_loss"}),
+        "bootstrap": ptBool(),
+        "random_state": ptInt()
+    ),
+    AST::algoLogReg(): (
+        "max_iter": ptInt(),
+        "C": ptFloat(),
+        "penalty": ptEnum({"l1", "l2", "elasticnet", "none"}),
+        "random_state": ptInt()
+    )
+);
 
 data TypeException
     = unknownColumn(str cause)
@@ -21,42 +72,7 @@ data TypeException
     | schemaInferenceFailed(str cause)
     ;
 
-data ColumnInfoJson = columnInfoJson(str \type, int rowCount, int cardinality);
-data SchemaJson = schemaJson(map[str, ColumnInfoJson] columns);
-
-int CLASSIFICATION_CARDINALITY_THRESHOLD = 20;
-
-map[Algorithm, ParamSignature] ALGO_SIGNATURES = (
-    algoLR(): (
-        "fit_intercept": ptBool(),
-        "positive": ptBool()
-    ),
-    algoRF(): (
-        "n_estimators": ptInt(),
-        "max_depth": ptInt(),
-        "criterion": ptEnum({"gini", "entropy", "log_loss"}),
-        "bootstrap": ptBool(),
-        "random_state": ptInt()
-    ),
-    algoLogReg(): (
-        "max_iter": ptInt(),
-        "C": ptFloat(),
-        "penalty": ptEnum({"l1", "l2", "elasticnet", "none"}),
-        "random_state": ptInt()
-    )
-);
-
-Task taskOf(algoLR())     = regression();
-Task taskOf(algoRF())     = classification();
-Task taskOf(algoLogReg()) = classification();
-
-Schema inferSchema(loc csvPath) {
-    loc scriptPath = getSchemaInferScript();
-    PID pid = createProcess(|PATH:///python3|, args=[scriptPath, csvPath]);
-    if (!isAlive(pid)) {
-        throw schemaInferenceFailed("Could not start schema inference process for <csvPath>");
-    }
-
+Schema inferSchema(loc csvPath, PID pid) {
     str rawResponse = "";
     int tries = 0;
     while (rawResponse == "" && tries < 60) {
@@ -84,9 +100,12 @@ Schema inferSchema(loc csvPath) {
     return schema;
 }
 
-ColumnType parseColumnType("numeric")     = tNumeric();
+ColumnType parseColumnType("numeric") = tNumeric();
+
 ColumnType parseColumnType("categorical") = tCategorical();
-ColumnType parseColumnType("boolean")     = tBoolean();
+
+ColumnType parseColumnType("boolean") = tBoolean();
+
 default ColumnType parseColumnType(str _) = tUnknown();
 
 private loc getSchemaInferScript() {
@@ -97,58 +116,75 @@ private loc getSchemaInferScript() {
     return getSingleFrom(found);
 }
 
-loc resolveDataPath(Load l:stepLoad(StrLit path, StrLit _)) {
+TypeStore checkPipeline(Syntax::Pipeline pipeline) {
+    pipelineAST = implode(#AST::Pipeline, pipeline);
+    return checkPipeline(pipelineAST);
+}
+
+TypeStore checkPipeline(pipeline(str name, Steps steps)) {
+    return checkSteps(steps);
+}
+
+TypeStore checkSteps(steps(Load load, list[Split] _, list[Select] select, list[Trans] trans, Model model, list[Eval] eval, list[Deploy] _, list[Monitor] _)) {
+    TypeStore store = checkLoad(load);
+
+    if (size(select) != 0) {
+        store = checkSelect(select[0], store);
+    }
+
+    if (size(trans) != 0) {
+        store = checkTrans(trans[0], store);
+    }
+
+    store = checkModel(model, store);
+
+    if (size(eval) != 0) {
+        checkEval(eval[0], store);
+    }
+    return store;
+}
+
+TypeStore checkLoad(Load l:stepLoad(StrLit path, StrLit target)) {
     str p = path.content;
     loc baseDir = l.src.parent;
-    return (baseDir + p);
-}
-
-void checkPipeline(Steps steps) {
-    loc csvPath = resolveDataPath(steps.load);
-    Schema initialSchema = inferSchema(csvPath);
-
-    str target = steps.load.target.content;
-
-    if (target notin initialSchema) {
-        throw unknownColumn("Target column \'<target>\' not found in dataset.");
+    loc scriptPath = getSchemaInferScript();
+    loc csvPath = baseDir + p;
+    PID pid = createProcess(|PATH:///python3|, args=[scriptPath, csvPath.top]);
+    if (!isAlive(pid)) {
+        throw schemaInferenceFailed("Could not start schema inference process for <csvPath>");
     }
-
-    Schema schema = initialSchema;
-
-    if (size(steps.select) != 0) {
-        schema = checkSelect(steps.select[0], schema, target);
-    }
-
-    if (size(steps.trans) != 0) {
-        schema = checkTrans(steps.trans[0], schema);
-    }
-
-    checkModelAgainstTarget(steps.model, initialSchema, target);
-    checkHyperparams(steps.model.expr);
-
-    if (size(steps.eval) != 0) {
-        checkEval(steps.eval[0], steps.model.expr);
-    }
-}
-
-Schema checkSelect(Select sel, Schema schema, str target) {
-    Schema newSchema = ();
-    for (StrLit f <- sel.features) {
-        str feat = f.content;
-        if (feat == target) {
-            throw incompatibleTarget("The result column \'<target>\' cannot be selected as a feature.");
+    try
+        Schema schema = inferSchema(csvPath, pid);
+    catch schemaInferenceFailed(str cause): {
+        if(isAlive(pid)) {
+            killProcess(pid, force=true);
         }
+        throw schemaInferenceFailed(cause);
+    }      
+    if (target.content notin schema) {
+        throw unknownColumn("Target column \'<target.content>\' not found in dataset.");
+    }
+    return tStore(target.content, schema, null());
+}
+
+TypeStore checkSelect(stepSelect(list[StrLit] features), TypeStore store) {
+    Schema schema = store.schema;
+    Schema newSchema = ();
+    for (StrLit f <- features) {
+        str feat = f.content;
         requireColumn(schema, feat);
         newSchema[feat] = schema[feat];
     }
-    return newSchema;
+    newSchema[store.target] = schema[store.target];
+    return tStore(store.target, newSchema, null());
 }
 
-Schema checkTrans(Trans t, Schema schema) {
-    for (PrepTransform pt <- t.transforms) {
+TypeStore checkTrans(stepTrans(list[PrepTransform] transforms), TypeStore store) {
+    Schema schema = store.schema;
+    for (PrepTransform pt <- transforms) {
         schema = checkAndApplyTransform(pt, schema);
     }
-    return schema;
+    return tStore(store.target, schema, null());
 }
 
 Schema checkAndApplyTransform(prepFill(StrLit feature, FillStrategy strategy), Schema schema) {
@@ -185,9 +221,11 @@ private void requireColumn(Schema schema, str feat) {
     }
 }
 
-void checkModelAgainstTarget(Model m, Schema initialSchema, str target) {
-    Task task = taskOf(m.expr.algo);
-    ColumnInfo targetInfo = initialSchema[target];
+TypeStore checkModel(stepModel(ModelExpr expr), TypeStore store) {
+    Task task = taskOf(expr.algo);
+    Schema schema = store.schema;
+    str target = store.target;
+    ColumnInfo targetInfo = schema[target];
 
     switch (task) {
         case regression(): {
@@ -208,43 +246,79 @@ void checkModelAgainstTarget(Model m, Schema initialSchema, str target) {
             }
         }
     }
+    checkHyperparams(expr);
+    return tStore(store.target, store.schema, task);
 }
 
-void checkHyperparams(ModelExpr expr) {
-    if (expr.algo notin ALGO_SIGNATURES) {
-        throw unknownHyperparam("No known hyperparameter signature registered for algorithm <expr.algo>.");
-    }
-    ParamSignature sig = ALGO_SIGNATURES[expr.algo];
-    for (hp(str name, Lit val) <- expr.hyperParams) {
+void checkHyperparams(modelTrain(Algorithm algo, set[Param] hyperParams)) {
+    ParamSignature sig = signatureOf(algo);
+    for (hp(str name, Lit val) <- hyperParams) {
         if (name notin sig) {
-            throw unknownHyperparam("\'<name>\' is not a valid hyperparameter for <expr.algo>.");
+            throw unknownHyperparam("\'<name>\' is not a valid hyperparameter for <algo>.");
         }
         if (!paramTypeMatches(val, sig[name])) {
-            throw hyperparamTypeMismatch("\'<name>\' has an incompatible value for <expr.algo>: expected <sig[name]>.");
+            throw hyperparamTypeMismatch("\'<name>\' has an incompatible value for <algo>: expected <sig[name]>.");
         }
     }
 }
 
-bool paramTypeMatches(intLit(_), ptInt())     = true;
-bool paramTypeMatches(intLit(_), ptFloat())   = true;
+ParamSignature signatureOf(algoLR()) = (
+    "fit_intercept": ptBool(),
+    "positive": ptBool()
+);
+
+ParamSignature signatureOf(algoRF()) = (
+    "n_estimators": ptInt(),
+    "max_depth": ptInt(),
+    "criterion": ptEnum({"gini", "entropy", "log_loss"}),
+    "bootstrap": ptBool(),
+    "random_state": ptInt()
+);
+
+ParamSignature signatureOf(algoLogReg()) = (
+    "max_iter": ptInt(),
+    "C": ptFloat(),
+    "penalty": ptEnum({"l1", "l2", "elasticnet", "none"}),
+    "random_state": ptInt()
+);
+
+bool paramTypeMatches(intLit(_), ptInt()) = true;
+
+bool paramTypeMatches(intLit(_), ptFloat()) = true;
+
 bool paramTypeMatches(floatLit(_), ptFloat()) = true;
-bool paramTypeMatches(boolLit(_), ptBool())   = true;
+
+bool paramTypeMatches(boolLit(_), ptBool()) = true;
+
 bool paramTypeMatches(strLit(strLit(str s)), ptEnum(set[str] allowed)) = s in allowed;
+
 default bool paramTypeMatches(Lit _, ParamType _) = false;
 
-void checkEval(Eval e, ModelExpr expr) {
-    Task task = taskOf(expr.algo);
-    for (Metric metric <- e.metrics) {
+void checkEval(stepEval(set[Metric] metrics), TypeStore store) {
+    Task task = store.task;
+    for (Metric metric <- metrics) {
         if (!metricMatchesTask(metric, task)) {
-            throw incompatibleMetric("Metric <metric> is not compatible with a <task> model (<expr.algo>).");
+            throw incompatibleMetric("Metric <metric> is not compatible with a <task> model.");
         }
     }
 }
 
-bool metricMatchesTask(mAccuracy(), classification())  = true;
+Task taskOf(algoLR()) = regression();
+
+Task taskOf(algoRF()) = classification();
+
+Task taskOf(algoLogReg()) = classification();
+
+bool metricMatchesTask(mAccuracy(), classification()) = true;
+
 bool metricMatchesTask(mPrecision(), classification()) = true;
-bool metricMatchesTask(mRecall(), classification())    = true;
-bool metricMatchesTask(mF1(), classification())        = true;
-bool metricMatchesTask(mMSE(), regression())           = true;
-bool metricMatchesTask(mRMSE(), regression())          = true;
+
+bool metricMatchesTask(mRecall(), classification()) = true;
+
+bool metricMatchesTask(mF1(), classification()) = true;
+
+bool metricMatchesTask(mMSE(), regression()) = true;
+
+bool metricMatchesTask(mRMSE(), regression()) = true;
+
 default bool metricMatchesTask(Metric _, Task _) = false;

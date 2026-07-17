@@ -3,7 +3,6 @@ module Interpreter
 import ParseTree;
 import List;
 import String;
-import Exception;
 import util::Maybe;
 import ListRelation;
 import Set;
@@ -14,19 +13,30 @@ import Message;
 
 import Syntax;
 import AST;
-import SemanticDomain;
 import PythonBridge;
+
+data PipelineState
+    = uninitialized()
+    | dataLoaded()
+    | dataSplitted()
+    | featureSelected()
+    | transformed()
+    | modelTrained()
+    | modelEvaluated()
+    | deployed(int port);
+
+data MLOpsStore = store(PipelineState state, str targetVariable, str trainedModelPath) | empty();
 
 data RuntimeException 
     = invalidTrainSize(str cause)
     | duplicateFieldSelection(str cause)
-    //| redundantFieldSelection(str cause)
-    | resultSelectedAsFeature(str cause)
-    //| featureNotSelected(str cause)
+    | targetSelectedAsFeature(str cause)
     | duplicateTransform(str cause)
     | transformOrderViolation(str cause)
-    //| noTestSetDefined(str cause)
-    //| noDeploymentDefined(str cause)
+    | fileNotFound(str cause)
+    | targetNotFound(str cause)
+    | featureNotFound(str cause)
+    | invalidErrorCode(str cause)
     ;
 
 MLOpsStore evalPipeline(Syntax::Pipeline pipeline) {
@@ -36,7 +46,14 @@ MLOpsStore evalPipeline(Syntax::Pipeline pipeline) {
 
 MLOpsStore evalPipeline(pipeline(str name, Steps steps)) {
     PID pid = startPythonWorker();
-    return evalSteps(steps, store(uninitialized(), "", ""), pid);
+    MLOpsStore s = empty();
+    try
+        s = evalSteps(steps, store(uninitialized(), "", ""), pid);
+    catch RuntimeException e: {
+        stopPythonWorker(pid);
+        throw e;
+    }
+    return s;
 }
 
 MLOpsStore evalSteps(steps(Load load, list[Split] split, list[Select] select, list[Trans] trans, Model model, list[Eval] eval, list[Deploy] deploy, list[Monitor] monitor), MLOpsStore s, PID pid) {
@@ -74,9 +91,7 @@ MLOpsStore evalLoad(Load l:stepLoad(StrLit path, StrLit target), MLOpsStore s, P
     return store(dataLoaded(), targetAsStr, s.trainedModelPath);
 }
 
-str evalStrLit(strLit(str s)) {
-    return s;
-}
+str evalStrLit(strLit(str s)) = s;
 
 MLOpsStore evalSplit(Split sp:stepSplit(real trainSize, list[int] randomState), MLOpsStore s, PID pid) {
     if (trainSize <= 0) {
@@ -105,7 +120,7 @@ MLOpsStore evalSelect(Select se:stepSelect(list[StrLit] features), MLOpsStore s,
         strFeatures += evalStrLit(feature);
     }
     if (s.targetVariable in strFeatures) {
-        throw resultSelectedAsFeature("The target column cannot be a feature.");
+        throw targetSelectedAsFeature("The target column cannot be a feature.");
     }
     PythonCmd cmd = selectCmd("SELECT", strFeatures);
     PythonResponse res = sendJsonToPython(pid, cmd);
@@ -143,17 +158,11 @@ tuple[str tr, str feat, str strat] evalPrepTransform(prepFill(StrLit feature, Fi
     return <"fillna", feat, strat>;
 }
 
-str evalFillStrategy(fillMean()) {
-    return "mean";
-}
+str evalFillStrategy(fillMean()) = "mean";
 
-str evalFillStrategy(fillMedian()) {
-    return "median";
-}
+str evalFillStrategy(fillMedian()) = "median";
 
-str evalFillStrategy(fillMode()) {
-    return "most_frequent";
-}
+str evalFillStrategy(fillMode()) = "most_frequent"; 
 
 tuple[str tr, str feat, str strat] evalPrepTransform(prepEncode(StrLit feature, EncodingMethod method)) {
     str feat = evalStrLit(feature);
@@ -161,13 +170,9 @@ tuple[str tr, str feat, str strat] evalPrepTransform(prepEncode(StrLit feature, 
     return <"encode", feat, meth>;
 }
 
-str evalEncodingMethod(encOneHot()) {
-    return "onehot";
-}
+str evalEncodingMethod(encOneHot()) = "onehot";
 
-str evalEncodingMethod(encLabel()) {
-    return "label";
-}
+str evalEncodingMethod(encLabel()) = "label";
 
 tuple[str tr, str feat, str strat] evalPrepTransform(prepScale(StrLit feature, ScaleMethod method)) {
     str feat = evalStrLit(feature);
@@ -175,13 +180,9 @@ tuple[str tr, str feat, str strat] evalPrepTransform(prepScale(StrLit feature, S
     return <"scale", feat, meth>;
 }
 
-str evalScaleMethod(scaleMinMax()) {
-    return "minmax";
-}
+str evalScaleMethod(scaleMinMax()) = "minmax";
 
-str evalScaleMethod(scaleStd()) {
-    return "std";
-}
+str evalScaleMethod(scaleStd()) = "std";
 
 MLOpsStore evalModel(Model m:stepModel(modelTrain(Algorithm algo, set[Param] hyperParams)), MLOpsStore s, PID pid) {
     str algo_as_string = evalAlgo(algo);
@@ -197,38 +198,24 @@ MLOpsStore evalModel(Model m:stepModel(modelTrain(Algorithm algo, set[Param] hyp
     return store(modelTrained(), s.targetVariable, res.modelPath);
 }
 
-str evalAlgo(algoLR()) {
-    return "LinReg";
-}
+str evalAlgo(algoLR()) = "LinReg";
 
-str evalAlgo(algoRF()) {
-    return "RandomForest";
-}
+str evalAlgo(algoRF()) = "RandomForest";
 
-str evalAlgo(algoLogReg()) {
-    return "LogReg";
-}
+str evalAlgo(algoLogReg()) = "LogReg";
 
 tuple[str, str] evalParam(hp(str name, Lit val)) {
     str val_as_string = evalLit(val);
     return <name,val_as_string>;
 }
 
-str evalLit(intLit(int i)) {
-    return "<i>";
-}
+str evalLit(intLit(int i)) = "<i>";
 
-str evalLit(floatLit(real f)) {
-    return "<f>";
-}
+str evalLit(floatLit(real f)) = "<f>";
 
-str evalLit(strLit(StrLit s)) {
-    return evalStrLit(s);
-}
+str evalLit(strLit(StrLit s)) = evalStrLit(s);
 
-str evalLit(boolLit(bool b)) {
-    return "<b>";
-}
+str evalLit(boolLit(bool b)) = "<b>";
 
 MLOpsStore evalEval(Eval e:stepEval(set[Metric] metrics), MLOpsStore s, PID pid) {
     for (Metric metric <- metrics) {
@@ -240,29 +227,17 @@ MLOpsStore evalEval(Eval e:stepEval(set[Metric] metrics), MLOpsStore s, PID pid)
     return store(modelEvaluated(), s.targetVariable, s.trainedModelPath);
 }
 
-str evalMetric(mAccuracy()) {
-    return "acc";
-}
+str evalMetric(mAccuracy()) = "acc";
 
-str evalMetric(mPrecision()) {
-    return "pre";
-}
+str evalMetric(mPrecision()) = "pre";
 
-str evalMetric(mRecall()) {
-    return "rec";
-}
+str evalMetric(mRecall()) = "rec";
 
-str evalMetric(mF1()) {
-    return "f1";
-}
+str evalMetric(mF1()) = "f1";
 
-str evalMetric(mMSE()) {
-    return "mse";
-}
+str evalMetric(mMSE()) = "mse";
 
-str evalMetric(mRMSE()) {
-    return "rmse";
-}
+str evalMetric(mRMSE()) = "rmse";
 
 MLOpsStore evalDeploy(stepDeploy(int port), MLOpsStore s) {
     // TODO
@@ -276,7 +251,24 @@ MLOpsStore evalMonitor(stepMonitor(set[DriftRule] dRules, list[LatencyRule] lRul
 
 void reportResult(PythonResponse res, str step, loc l) {
     if (res.status == "ERROR") {
-        throw "Error: <res.message>";
+        if (res.code == 0) {
+            throw "Error: <res.message>";
+        } else {
+            throwErrorWithCode(res.code, res.message);
+        }
     }
     showMessage(info("[<step>] <res.message>", l));
+}
+
+void throwErrorWithCode(int code, str message) {
+    switch(code) {
+        case 1:
+            throw fileNotFound(message);
+        case 2:
+            throw targetNotFound(message);
+        case 3:
+            throw featureNotFound(message);
+        default:
+            throw invalidErrorCode("This error code is not identified with a specified exception.");
+    }
 }
