@@ -82,6 +82,7 @@ def main():
 
                 if context["target"] not in context["df"].columns:
                     send_response("ERROR", f"Specified target {context['target']} is not a column in loaded CSV.", code=2)
+                    continue
                 
                 send_response("SUCCESS", f"CSV loaded successfully. Form: {context['df'].shape}")
             

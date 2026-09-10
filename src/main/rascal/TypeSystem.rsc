@@ -12,6 +12,7 @@ import util::IDEServices;
 
 import AST;
 import Syntax;
+import PythonBridge;
 
 data ColumnType
     = tNumeric()
@@ -108,14 +109,6 @@ ColumnType parseColumnType("boolean") = tBoolean();
 
 default ColumnType parseColumnType(str _) = tUnknown();
 
-private loc getSchemaInferScript() {
-    set[loc] found = findResources("schema_infer.py");
-    if (size(found) != 1) {
-        throw schemaInferenceFailed("Expected exactly one schema_infer.py, found <size(found)>: <found>");
-    }
-    return getSingleFrom(found);
-}
-
 TypeStore checkPipeline(Syntax::Pipeline pipeline) {
     pipelineAST = implode(#AST::Pipeline, pipeline);
     return checkPipeline(pipelineAST);
@@ -147,9 +140,9 @@ TypeStore checkSteps(steps(Load load, list[Split] _, list[Select] select, list[T
 TypeStore checkLoad(Load l:stepLoad(StrLit path, StrLit target)) {
     str p = path.content;
     loc baseDir = l.src.parent;
-    loc scriptPath = getSchemaInferScript();
+    loc scriptPath = getPath("schema_infer.py");
     loc csvPath = baseDir + p;
-    PID pid = createProcess(|PATH:///python3|, args=[scriptPath, csvPath.top]);
+    PID pid = createProcess(|project://mlopsdsl/src/main/python/.mlopsenv/bin/python3|, args=[scriptPath, csvPath.top]);
     if (!isAlive(pid)) {
         throw schemaInferenceFailed("Could not start schema inference process for <csvPath>");
     }

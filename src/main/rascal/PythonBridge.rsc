@@ -4,6 +4,7 @@ import util::ShellExec;
 import lang::json::IO;
 import IO;
 import String;
+import Set;
 
 data PythonCmd 
   = loadCmd(str cmd, str path, str target)
@@ -18,8 +19,16 @@ data PythonResponse
   = response(str status, str message, str modelPath, int code)
   ;
 
+public loc getPath(str file) {
+    set[loc] found = findResources(file);
+    if (size(found) != 1) {
+        throw "Expected exactly one file with name <file>, found <size(found)>: <found>";
+    }
+    return getSingleFrom(found);
+}
+
 PID startPythonWorker() {
-    PID pid = createProcess(|PATH:///python3|, args=[|project://mlopsdsl/src/main/python/pipeline_worker.py|]);
+    PID pid = createProcess(|project://mlopsdsl/src/main/python/.mlopsenv/bin/python3|, args=[getPath("pipeline_worker.py")]);
     if (!isAlive(pid)) throw "Error: Python worker could not be started.";
     return pid;
 }
