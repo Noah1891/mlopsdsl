@@ -31,6 +31,7 @@ data RuntimeException
     = invalidTrainSize(str cause)
     | duplicateFieldSelection(str cause)
     | targetSelectedAsFeature(str cause)
+    | targetSelectedForTransform(str cause)
     | duplicateTransform(str cause)
     | transformOrderViolation(str cause)
     | fileNotFound(str cause)
@@ -132,6 +133,9 @@ MLOpsStore evalTrans(Trans t:stepTrans(list[PrepTransform] transforms), MLOpsSto
     lrel[str tr, str feat, str param] trans = [];
     for (PrepTransform pt <- transforms) {
         tuple[str tr, str feat, str param] ptrans = evalPrepTransform(pt);
+        if (ptrans.feat == s.targetVariable) {
+            throw targetSelectedForTransform("The target column cannot be transformed");
+        }
         trans += ptrans;
     }
     list[list[str]] transforms_per_features = groupDomainByRange(trans<tr,feat>);
@@ -239,7 +243,7 @@ str evalMetric(mMSE()) = "mse";
 
 str evalMetric(mRMSE()) = "rmse";
 
-MLOpsStore evalDeploy(stepDeploy(int port), MLOpsStore s) {
+MLOpsStore evalDeploy(stepDeploy(int port, list[bool] run), MLOpsStore s) {
     // TODO
     return store(deployed(port), s.targetVariable, s.trainedModelPath);
 }

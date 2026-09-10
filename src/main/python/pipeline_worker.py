@@ -12,11 +12,13 @@ import joblib
 
 context = {
     "df": None,
+    "y": None,
     "target": None,
     "X_train": None,
     "X_test": None,
     "y_train": None,
     "y_test": None,
+    "raw_features": [],
     "selected_features": [],
     "transformers": {},
     "transform_log": [],
@@ -83,21 +85,22 @@ def main():
                 if context["target"] not in context["df"].columns:
                     send_response("ERROR", f"Specified target {context['target']} is not a column in loaded CSV.", code=2)
                     continue
+
+                context["y"] = context["df"][context["target"]]
+                context["df"] = context["df"].drop(columns=[context["target"]])
+                context["raw_features"] = list(context["df"].columns)
                 
                 send_response("SUCCESS", f"CSV loaded successfully. Form: {context['df'].shape}")
             
             elif cmd == "SPLIT":
                 ratio = float(request["ratio"]);
                 random_state = int(request["randomState"]);
-                df = context["df"]
-                y_col = context["target"]
+                X = context["df"]
+                y = context["y"]
                 
-                if df is None:
+                if X is None:
                     send_response("ERROR", "No data loaded. Split not possible.")
                     continue
-                    
-                X = df.drop(columns=[y_col])
-                y = df[y_col]
                 
                 X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=ratio, random_state=random_state)
                 context["X_train"] = X_train
@@ -108,37 +111,38 @@ def main():
                 send_response("SUCCESS", f"Data splitted (Train: {len(X_train)}, Test: {len(X_test)})")
             
             elif cmd == "SELECT":
-                selected_features = request["features"]
+                context["selected_features"] = request["features"]
 
                 if context["X_train"] is not None:
-                    missing = [f for f in selected_features if f not in context["X_train"].columns]
+                    missing = [f for f in context["selected_features"] if f not in context["X_train"].columns]
                     if missing:
                         send_response("ERROR", f"Columns not found in Dataframe: {missing}", code=3)
                         continue
                 
-                    context["X_train"] = context["X_train"][selected_features]
-                    context["X_test"] = context["X_test"][selected_features]
+                    context["X_train"] = context["X_train"][context["selected_features"]]
+                    context["X_test"] = context["X_test"][context["selected_features"]]
                 
                 else:
                     if context["df"] is None:
                         send_response("ERROR", "No data loaded.")
                         continue
 
-                    missing = [f for f in selected_features if f not in context["df"].columns]
+                    missing = [f for f in context["selected_features"] if f not in context["df"].columns]
                     if missing:
                         send_response("ERROR", f"Columns not found in Dataframe: {missing}", code=3)
                         continue
             
-                    context["df"] = context["df"][selected_features]
-                
-                send_response("SUCCESS", f"Features selected successfully. Kept columns: {selected_features}")
+                    context["df"] = context["df"][context["selected_features"]]
+
+                kept = context["selected_features"]
+                send_response("SUCCESS", f"Features selected successfully. Kept columns: {kept}")
             
             elif cmd == "TRANSFORM":
                 action = request["action"]
                 feature = request["feature"]
                 method = request["method"]
 
-                context["transform_log"] += [(action, feature)]
+                context["transform_log"] += [(action, feature, method)]
                 
                 working_on_split = context["X_train"] is not None
                 
@@ -221,9 +225,8 @@ def main():
                 model_dir = request["modelDir"]
                 
                 if context["X_train"] is None:
-                    X = context["df"].drop(columns=[context["target"]])
-                    y = context["df"][context["target"]]
-                    context["X_train"], context["y_train"] = X, y
+                    context["X_train"] = context["df"]
+                    context["y_train"] = context["y"]
                 
                 if algo not in ALGORITHMS:
                     send_response("ERROR", f"Algorithm {algo} not supported.")
@@ -258,7 +261,10 @@ def main():
                 model_path = os.path.join(model_dir, f"{algo}_model.pkl")
                 deployment_artifact = {
                     "model": context["model"],
-                    "transformers": context["transformers"]
+                    "transformers": context["transformers"],
+                    "transform_log": context["transform_log"],
+                    "selected_features": context["selected_features"] if context["selected_features"] else context["raw_features"],
+                    "transformed_columns": list(context["X_train"].columns)
                 }
                 joblib.dump(deployment_artifact, model_path)
                 

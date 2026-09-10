@@ -16,7 +16,7 @@ data Model(loc src=|unknown:///|) = stepModel(ModelExpr expr);
 
 data Eval(loc src=|unknown:///|) = stepEval(set[Metric] metrics);
 
-data Deploy(loc src=|unknown:///|) = stepDeploy(int port);
+data Deploy(loc src=|unknown:///|) = stepDeploy(int port, list[bool] run);
 
 data Monitor(loc src=|unknown:///|) = stepMonitor(set[DriftRule] dRules, list[LatencyRule] lRule);
 
