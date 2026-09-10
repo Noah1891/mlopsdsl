@@ -21,7 +21,7 @@ syntax Eval = stepEval: "evaluation" "(" {Metric ","}+ metrics ")";
 
 syntax Deploy = stepDeploy: "deployment" "(" "port" "=" IntLit port ("," "run" "=" BoolLit run)?")";
 
-syntax Monitor = stepMonitor: "monitoring" "(" {DriftRule ","}* dRules  ("," LatencyRule lRule)?")";
+syntax Monitor = stepMonitor: "monitoring" "(" {DriftRule ","}* driftRules  ("," LatencyRule latencyRule)?")";
 
 syntax PrepTransform = prepFill: "fillna" "(" StrLit feature "," FillStrategy strategy ")"
   | prepEncode: "encode" "(" StrLit feature "," EncodingMethod method ")"
@@ -37,7 +37,7 @@ syntax EncodingMethod = encOneHot: "onehot"
 syntax ScaleMethod = scaleMinMax: "minmax"
                    | scaleStd: "std";
                   
-syntax ModelExpr = modelTrain: Algorithm algo "(" "path" "=" StrLit path "," {Param ","}* hyperParams ")";
+syntax ModelExpr = modelTrain: Algorithm algo "(" "dir" "=" StrLit path "," {Param ","}* hyperParams ")";
 
 syntax Algorithm = algoLR: "LinReg" 
                | algoRF: "RandomForest"

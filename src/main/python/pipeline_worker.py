@@ -22,7 +22,9 @@ context = {
     "selected_features": [],
     "transformers": {},
     "transform_log": [],
+    "baseline_df": None,
     "model": None,
+    "path": None,
     "metrics": {}
 }
 
@@ -142,6 +144,9 @@ def main():
                 feature = request["feature"]
                 method = request["method"]
 
+                source = context["X_train"] if context["X_train"] is not None else context["df"]
+                context["baseline_df"] = source.copy()
+
                 context["transform_log"] += [(action, feature, method)]
                 
                 working_on_split = context["X_train"] is not None
@@ -259,6 +264,7 @@ def main():
                 
                 os.makedirs(model_dir, exist_ok=True)
                 model_path = os.path.join(model_dir, f"{algo}_model.pkl")
+                context["path"] = model_path
                 deployment_artifact = {
                     "model": context["model"],
                     "transformers": context["transformers"],
@@ -271,7 +277,6 @@ def main():
                 send_response("SUCCESS", f"Model {algo} trained successfully.", model_path)
             
             elif cmd == "EVAL":
-
                 metric = request["metric"]
                 model = context["model"]
 
@@ -284,6 +289,13 @@ def main():
                 
                 context["metrics"][metric] = result
                 send_response("SUCCESS", f"Evaluated model with metric {metric}: {result}")
+
+            elif cmd == "MONITOR":
+                features = request["features"]
+                deployment_artifact = joblib.load(context["path"])
+                deployment_artifact["baseline_df"] = context["baseline_df"][features]
+                joblib.dump(deployment_artifact, context["path"])
+                send_response("SUCCESS", f"Monitored features selected successfully: {features}")
 
             else:
                 send_response("ERROR", f"Unknown command: {cmd}")

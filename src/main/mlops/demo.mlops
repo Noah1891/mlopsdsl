@@ -21,7 +21,7 @@ pipeline demo {
     )
     
     model LogReg (
-        path = "../../../models/demo"
+        dir = "../../../models/demo",
         penalty = "l2",
         max_iter = 150
     )
@@ -29,5 +29,9 @@ pipeline demo {
     evaluation (
         accuracy,
         precision
-    )     
+    )
+
+    monitoring (
+        drift(feature = "Age", window = 50) <= 0.1
+    ) 
 }

@@ -18,7 +18,7 @@ data Eval(loc src=|unknown:///|) = stepEval(set[Metric] metrics);
 
 data Deploy(loc src=|unknown:///|) = stepDeploy(int port, list[bool] run);
 
-data Monitor(loc src=|unknown:///|) = stepMonitor(set[DriftRule] dRules, list[LatencyRule] lRule);
+data Monitor(loc src=|unknown:///|) = stepMonitor(set[DriftRule] driftRules, list[LatencyRule] latencyRule);
 
 data DataSource(loc src=|unknown:///|) = srcCsv(StrLit path)
                 | srcDb(StrLit conn, StrLit query);
@@ -37,7 +37,7 @@ data EncodingMethod(loc src=|unknown:///|) = encOneHot()
 data ScaleMethod(loc src=|unknown:///|) = scaleMinMax()
                    | scaleStd();
 
-data ModelExpr(loc src=|unknown:///|) = modelTrain(Algorithm algo, StrLit path, set[Param] hyperParams);
+data ModelExpr(loc src=|unknown:///|) = modelTrain(Algorithm algo, StrLit dir, set[Param] hyperParams);
 
 data Algorithm(loc src=|unknown:///|) = algoLR()
                | algoRF()

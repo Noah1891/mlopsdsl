@@ -34,6 +34,7 @@ data RuntimeException
     | targetSelectedForTransform(str cause)
     | duplicateTransform(str cause)
     | transformOrderViolation(str cause)
+    | targetSelectedForMonitoring(str cause)
     | fileNotFound(str cause)
     | targetNotFound(str cause)
     | featureNotFound(str cause)
@@ -72,13 +73,13 @@ MLOpsStore evalSteps(steps(Load load, list[Split] split, list[Select] select, li
     if (size(eval) != 0) {
         s = evalEval(eval[0], s, pid);
     }
-    stopPythonWorker(pid);
     if (size(deploy) != 0) {
         s = evalDeploy(deploy[0], s);
     }
     if (size(monitor) != 0) {
-        s = evalMonitor(monitor[0], s);
-    } 
+        s = evalMonitor(monitor[0], s, pid);
+    }
+    stopPythonWorker(pid);
     return s;
 }
 
@@ -249,9 +250,31 @@ MLOpsStore evalDeploy(stepDeploy(int port, list[bool] run), MLOpsStore s) {
     return store(deployed(port), s.targetVariable, s.trainedModelPath);
 }
 
-MLOpsStore evalMonitor(stepMonitor(set[DriftRule] dRules, list[LatencyRule] lRule), MLOpsStore s) {
-    // TODO
+MLOpsStore evalMonitor(Monitor mon:stepMonitor(set[DriftRule] driftRules, list[LatencyRule] latencyRule), MLOpsStore s, PID pid) {
+    list[str] monitored = [];
+    for (DriftRule driftRule <- driftRules) {
+        tuple[str feat, int win, real threshold] dRule = evalDriftRule(driftRule);
+        if (dRule.feat == s.targetVariable) {
+            throw targetSelectedForMonitoring("The target can not be selected as a monitored feature.");
+        }
+        monitored += dRule.feat;
+    }
+    PythonCmd cmd = monitorCmd("MONITOR", monitored);
+    PythonResponse res = sendJsonToPython(pid, cmd);
+    reportResult(res, "MONITOR", mon.src);
+    if (size(latencyRule) != 0) {
+        int ms = evalLatencyRule(latencyRule[0]);
+    }
     return s;
+}
+
+tuple[str feat, int win, real threshold] evalDriftRule(ruleDrift(StrLit feature, int window, real threshold)) {
+    str feat = evalStrLit(feature);
+    return <feat, window, threshold>;
+}
+
+int evalLatencyRule(ruleLatency(int ms)) {
+    return ms;
 }
 
 void reportResult(PythonResponse res, str step, loc l) {

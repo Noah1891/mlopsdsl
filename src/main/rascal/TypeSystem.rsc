@@ -118,7 +118,7 @@ TypeStore checkPipeline(pipeline(str name, Steps steps)) {
     return checkSteps(steps);
 }
 
-TypeStore checkSteps(steps(Load load, list[Split] _, list[Select] select, list[Trans] trans, Model model, list[Eval] eval, list[Deploy] _, list[Monitor] _)) {
+TypeStore checkSteps(steps(Load load, list[Split] _, list[Select] select, list[Trans] trans, Model model, list[Eval] eval, list[Deploy] _, list[Monitor] monitor)) {
     TypeStore store = checkLoad(load);
 
     if (size(select) != 0) {
@@ -133,6 +133,9 @@ TypeStore checkSteps(steps(Load load, list[Split] _, list[Select] select, list[T
 
     if (size(eval) != 0) {
         checkEval(eval[0], store);
+    }
+    if (size(monitor) != 0) {
+        checkMonitor(monitor[0], store);
     }
     return store;
 }
@@ -243,7 +246,7 @@ TypeStore checkModel(stepModel(ModelExpr expr), TypeStore store) {
     return tStore(store.target, store.schema, task);
 }
 
-void checkHyperparams(modelTrain(Algorithm algo, set[Param] hyperParams)) {
+void checkHyperparams(modelTrain(Algorithm algo, StrLit _, set[Param] hyperParams)) {
     ParamSignature sig = signatureOf(algo);
     for (hp(str name, Lit val) <- hyperParams) {
         if (name notin sig) {
@@ -315,3 +318,9 @@ bool metricMatchesTask(mMSE(), regression()) = true;
 bool metricMatchesTask(mRMSE(), regression()) = true;
 
 default bool metricMatchesTask(Metric _, Task _) = false;
+
+void checkMonitor(stepMonitor(set[DriftRule] driftRules, list[LatencyRule] _), TypeStore store) {
+    for (DriftRule driftRule <- driftRules) {
+        requireColumn(store.schema, driftRule.feature.content);
+    }
+}
