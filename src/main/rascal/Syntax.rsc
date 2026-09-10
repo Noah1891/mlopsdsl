@@ -37,7 +37,7 @@ syntax EncodingMethod = encOneHot: "onehot"
 syntax ScaleMethod = scaleMinMax: "minmax"
                    | scaleStd: "std";
                   
-syntax ModelExpr = modelTrain: Algorithm algo "(" {Param ","}* hyperParams ")";
+syntax ModelExpr = modelTrain: Algorithm algo "(" "path" "=" StrLit path "," {Param ","}* hyperParams ")";
 
 syntax Algorithm = algoLR: "LinReg" 
                | algoRF: "RandomForest"

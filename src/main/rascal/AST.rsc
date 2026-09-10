@@ -37,7 +37,7 @@ data EncodingMethod(loc src=|unknown:///|) = encOneHot()
 data ScaleMethod(loc src=|unknown:///|) = scaleMinMax()
                    | scaleStd();
 
-data ModelExpr(loc src=|unknown:///|) = modelTrain(Algorithm algo, set[Param] hyperParams);
+data ModelExpr(loc src=|unknown:///|) = modelTrain(Algorithm algo, StrLit path, set[Param] hyperParams);
 
 data Algorithm(loc src=|unknown:///|) = algoLR()
                | algoRF()

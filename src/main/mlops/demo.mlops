@@ -21,6 +21,7 @@ pipeline demo {
     )
     
     model LogReg (
+        path = "../../../models/demo"
         penalty = "l2",
         max_iter = 150
     )

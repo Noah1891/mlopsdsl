@@ -188,14 +188,15 @@ str evalScaleMethod(scaleMinMax()) = "minmax";
 
 str evalScaleMethod(scaleStd()) = "std";
 
-MLOpsStore evalModel(Model m:stepModel(modelTrain(Algorithm algo, set[Param] hyperParams)), MLOpsStore s, PID pid) {
+MLOpsStore evalModel(Model m:stepModel(modelTrain(Algorithm algo, StrLit path, set[Param] hyperParams)), MLOpsStore s, PID pid) {
     str algo_as_string = evalAlgo(algo);
     map[str, str] params = (); 
     for (Param hyperParam <- hyperParams) {
         tuple[str name, str val] param = evalParam(hyperParam);
         params[param.name] = param.val;
     }
-    str modelDir = resolveLocation(|project://mlopsdsl| + "models").path;
+    str p = evalStrLit(path);
+    str modelDir = (m.src.parent + p).path;
     PythonCmd cmd = trainCmd("TRAIN", algo_as_string, params, modelDir);
     PythonResponse res = sendJsonToPython(pid, cmd);
     reportResult(res, "TRAIN", m.src);
