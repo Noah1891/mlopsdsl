@@ -52,7 +52,7 @@ METRICS = {
 }
 
 def send_response(status, message, model_path="", code=0):
-    """Helper function, thath produces JSON in the Rascal Response-ADT format"""
+    """Helper function, that produces JSON in the Rascal Response-ADT format"""
     res = {
         "status": status,
         "message": message,
