@@ -80,8 +80,12 @@ Schema inferSchema(loc csvPath, PID pid) {
         rawResponse = readWithWait(pid, 500);
         tries += 1;
         if (!isAlive(pid) && rawResponse == "") {
-            str err = readFromErr(pid);
-            throw schemaInferenceFailed("Schema inference process crashed: <err>");
+            rawResponse = readWithWait(pid, 200);
+            if (rawResponse == "") {
+                str err = readFromErr(pid);
+                throw schemaInferenceFailed("Schema inference process crashed: <err>");
+            }
+            
         }
     }
     if (rawResponse == "") {

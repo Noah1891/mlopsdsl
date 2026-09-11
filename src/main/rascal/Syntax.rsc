@@ -19,7 +19,7 @@ syntax Model = stepModel: "model" ModelExpr expr;
 
 syntax Eval = stepEval: "evaluation" "(" {Metric ","}+ metrics ")";
 
-syntax Deploy = stepDeploy: "deployment" "(" "port" "=" IntLit port ("," "run" "=" BoolLit run)?")";
+syntax Deploy = stepDeploy: "deployment" "(" "port" "=" IntLit port ")";
 
 syntax Monitor = stepMonitor: "monitoring" "(" {DriftRule ","}* driftRules  ("," LatencyRule latencyRule)?")";
 

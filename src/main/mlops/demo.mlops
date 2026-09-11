@@ -31,7 +31,7 @@ pipeline demo {
         precision
     )
 
-    monitoring (
-        drift(feature = "Age", window = 50) <= 0.1
-    ) 
+    deployment (
+        port = 8000
+    )
 }

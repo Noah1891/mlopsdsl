@@ -17,7 +17,7 @@ data PythonCmd
   ;
 
 data PythonResponse
-  = response(str status, str message, str modelPath, int code)
+  = response(str status, str message, str modelFilePath, int code)
   ;
 
 public loc getPath(str file) {

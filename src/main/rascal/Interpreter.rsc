@@ -14,6 +14,7 @@ import Message;
 import Syntax;
 import AST;
 import PythonBridge;
+import CodeGen;
 
 data PipelineState
     = uninitialized()
@@ -25,7 +26,7 @@ data PipelineState
     | modelEvaluated()
     | deployed(int port);
 
-data MLOpsStore = store(PipelineState state, str targetVariable, str trainedModelPath) | empty();
+data MLOpsStore = store(PipelineState state, str targetVariable, str trainedModelFilePath) | empty();
 
 data RuntimeException 
     = invalidTrainSize(str cause)
@@ -90,7 +91,7 @@ MLOpsStore evalLoad(Load l:stepLoad(StrLit path, StrLit target), MLOpsStore s, P
     PythonCmd cmd = loadCmd("LOAD", absolutePath, targetAsStr);
     PythonResponse res = sendJsonToPython(pid, cmd);
     reportResult(res, "LOAD", l.src);
-    return store(dataLoaded(), targetAsStr, s.trainedModelPath);
+    return store(dataLoaded(), targetAsStr, s.trainedModelFilePath);
 }
 
 str evalStrLit(strLit(str s)) = s;
@@ -110,7 +111,7 @@ MLOpsStore evalSplit(Split sp:stepSplit(real trainSize, list[int] randomState), 
     PythonCmd cmd = splitCmd("SPLIT", ratioStr, randomStateStr);
     PythonResponse res = sendJsonToPython(pid, cmd);
     reportResult(res, "SPLIT", sp.src);
-    return store(dataSplitted(), s.targetVariable, s.trainedModelPath);
+    return store(dataSplitted(), s.targetVariable, s.trainedModelFilePath);
 }
 
 MLOpsStore evalSelect(Select se:stepSelect(list[StrLit] features), MLOpsStore s, PID pid) {
@@ -127,7 +128,7 @@ MLOpsStore evalSelect(Select se:stepSelect(list[StrLit] features), MLOpsStore s,
     PythonCmd cmd = selectCmd("SELECT", strFeatures);
     PythonResponse res = sendJsonToPython(pid, cmd);
     reportResult(res, "SELECT", se.src);
-    return store(featureSelected(), s.targetVariable, s.trainedModelPath);
+    return store(featureSelected(), s.targetVariable, s.trainedModelFilePath);
 }
 
 MLOpsStore evalTrans(Trans t:stepTrans(list[PrepTransform] transforms), MLOpsStore s, PID pid) {
@@ -154,7 +155,7 @@ MLOpsStore evalTrans(Trans t:stepTrans(list[PrepTransform] transforms), MLOpsSto
         PythonResponse res = sendJsonToPython(pid, cmd);
         reportResult(res, "TRANSFORM", t.src);
     }
-    return store(transformed(), s.targetVariable, s.trainedModelPath);
+    return store(transformed(), s.targetVariable, s.trainedModelFilePath);
 }
 
 tuple[str tr, str feat, str strat] evalPrepTransform(prepFill(StrLit feature, FillStrategy strategy)) {
@@ -201,7 +202,7 @@ MLOpsStore evalModel(Model m:stepModel(modelTrain(Algorithm algo, StrLit path, s
     PythonCmd cmd = trainCmd("TRAIN", algo_as_string, params, modelDir);
     PythonResponse res = sendJsonToPython(pid, cmd);
     reportResult(res, "TRAIN", m.src);
-    return store(modelTrained(), s.targetVariable, res.modelPath);
+    return store(modelTrained(), s.targetVariable, res.modelFilePath);
 }
 
 str evalAlgo(algoLR()) = "LinReg";
@@ -230,7 +231,7 @@ MLOpsStore evalEval(Eval e:stepEval(set[Metric] metrics), MLOpsStore s, PID pid)
         PythonResponse res = sendJsonToPython(pid, cmd);
         reportResult(res, "EVAL", e.src);
     }
-    return store(modelEvaluated(), s.targetVariable, s.trainedModelPath);
+    return store(modelEvaluated(), s.targetVariable, s.trainedModelFilePath);
 }
 
 str evalMetric(mAccuracy()) = "acc";
@@ -245,9 +246,16 @@ str evalMetric(mMSE()) = "mse";
 
 str evalMetric(mRMSE()) = "rmse";
 
-MLOpsStore evalDeploy(stepDeploy(int port, list[bool] run), MLOpsStore s) {
-    // TODO
-    return store(deployed(port), s.targetVariable, s.trainedModelPath);
+MLOpsStore evalDeploy(Deploy d:stepDeploy(int port), MLOpsStore s) {
+    loc filePath = |file:///| + s.trainedModelFilePath;
+    str fastAPIApp = genFastAPIApp(filePath.file);
+    str dockerfile = genDockerfile(filePath.file, port);
+    str requirements = genRequirementsTXT();
+    writeFile(filePath.parent + "app.py", fastAPIApp);
+    writeFile(filePath.parent + "Dockerfile", dockerfile);
+    writeFile(filePath.parent + "requirements.txt", requirements);
+    showMessage(info("[DEPLOY] Generated deployement artifacts under <filePath.parent.path>", d.src));
+    return store(deployed(port), s.targetVariable, s.trainedModelFilePath);
 }
 
 MLOpsStore evalMonitor(Monitor mon:stepMonitor(set[DriftRule] driftRules, list[LatencyRule] latencyRule), MLOpsStore s, PID pid) {

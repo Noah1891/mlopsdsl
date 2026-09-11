@@ -9,6 +9,7 @@ from sklearn.linear_model import LinearRegression, LogisticRegression
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, mean_squared_error, root_mean_squared_error
 import joblib
+from pathlib import Path
 
 context = {
     "df": None,
@@ -53,12 +54,12 @@ METRICS = {
     "rmse": root_mean_squared_error
 }
 
-def send_response(status, message, model_path="", code=0):
+def send_response(status, message, file_path="", code=0):
     """Helper function, that produces JSON in the Rascal Response-ADT format"""
     res = {
         "status": status,
         "message": message,
-        "modelPath": model_path,
+        "modelFilePath": file_path,
         "code": code
     }
     print(json.dumps(res))
@@ -263,8 +264,9 @@ def main():
                 context["model"] = model
                 
                 os.makedirs(model_dir, exist_ok=True)
-                model_path = os.path.join(model_dir, f"{algo}_model.pkl")
-                context["path"] = model_path
+                file_name = f"{algo}_model.pkl"
+                model_file_path = Path(os.path.join(model_dir, file_name)).resolve()
+                context["path"] = model_file_path
                 deployment_artifact = {
                     "model": context["model"],
                     "transformers": context["transformers"],
@@ -272,9 +274,9 @@ def main():
                     "selected_features": context["selected_features"] if context["selected_features"] else context["raw_features"],
                     "transformed_columns": list(context["X_train"].columns)
                 }
-                joblib.dump(deployment_artifact, model_path)
+                joblib.dump(deployment_artifact, model_file_path)
                 
-                send_response("SUCCESS", f"Model {algo} trained successfully.", model_path)
+                send_response("SUCCESS", f"Model {algo} trained successfully.", str(model_file_path))
             
             elif cmd == "EVAL":
                 metric = request["metric"]
