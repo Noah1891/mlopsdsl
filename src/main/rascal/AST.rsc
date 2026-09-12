@@ -57,7 +57,9 @@ data Metric(loc src=|unknown:///|) = mAccuracy()
             | mMSE()
             | mRMSE();
 
-data DriftRule(loc src=|unknown:///|) = ruleDrift(StrLit feature, int window, real threshold);
+data DriftRule(loc src=|unknown:///|) = ruleDrift(DriftMethod dMethod, StrLit feature, int window, real threshold);
+
+data DriftMethod(loc src=|unknown:///|) = dmKS() | dmChiSquare(); 
 
 data LatencyRule(loc src=|unknown:///|) = ruleLatency(int ms);
 

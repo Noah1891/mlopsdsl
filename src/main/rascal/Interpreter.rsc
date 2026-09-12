@@ -10,6 +10,7 @@ import util::ShellExec;
 import IO;
 import util::IDEServices;
 import Message;
+import util::Maybe;
 
 import Syntax;
 import AST;
@@ -26,7 +27,7 @@ data PipelineState
     | modelEvaluated()
     | deployed(int port);
 
-data MLOpsStore = store(PipelineState state, str targetVariable, str trainedModelFilePath) | empty();
+data MLOpsStore = store(str name, PipelineState state, str targetVariable, str trainedModelFilePath, bool monitored, Maybe[int] latency) | empty();
 
 data RuntimeException 
     = invalidTrainSize(str cause)
@@ -36,6 +37,10 @@ data RuntimeException
     | duplicateTransform(str cause)
     | transformOrderViolation(str cause)
     | targetSelectedForMonitoring(str cause)
+    | windowTooSmall(str cause)
+    | invalidThreshold(str cause)
+    | noDeploymentDeclared(str cause)
+    | invalidLatency(str cause)
     | fileNotFound(str cause)
     | targetNotFound(str cause)
     | featureNotFound(str cause)
@@ -51,7 +56,7 @@ MLOpsStore evalPipeline(pipeline(str name, Steps steps)) {
     PID pid = startPythonWorker();
     MLOpsStore s = empty();
     try
-        s = evalSteps(steps, store(uninitialized(), "", ""), pid);
+        s = evalSteps(steps, store(name, uninitialized(), "", "", false, nothing()), pid);
     catch RuntimeException e: {
         stopPythonWorker(pid);
         throw e;
@@ -81,6 +86,9 @@ MLOpsStore evalSteps(steps(Load load, list[Split] split, list[Select] select, li
         s = evalMonitor(monitor[0], s, pid);
     }
     stopPythonWorker(pid);
+    if (deployed(_) := s.state) {
+        finalizeDeployment(s);
+    }
     return s;
 }
 
@@ -91,7 +99,7 @@ MLOpsStore evalLoad(Load l:stepLoad(StrLit path, StrLit target), MLOpsStore s, P
     PythonCmd cmd = loadCmd("LOAD", absolutePath, targetAsStr);
     PythonResponse res = sendJsonToPython(pid, cmd);
     reportResult(res, "LOAD", l.src);
-    return store(dataLoaded(), targetAsStr, s.trainedModelFilePath);
+    return store(s.name, dataLoaded(), targetAsStr, s.trainedModelFilePath, s.monitored, s.latency);
 }
 
 str evalStrLit(strLit(str s)) = s;
@@ -111,7 +119,7 @@ MLOpsStore evalSplit(Split sp:stepSplit(real trainSize, list[int] randomState), 
     PythonCmd cmd = splitCmd("SPLIT", ratioStr, randomStateStr);
     PythonResponse res = sendJsonToPython(pid, cmd);
     reportResult(res, "SPLIT", sp.src);
-    return store(dataSplitted(), s.targetVariable, s.trainedModelFilePath);
+    return store(s.name, dataSplitted(), s.targetVariable, s.trainedModelFilePath, s.monitored, s.latency);
 }
 
 MLOpsStore evalSelect(Select se:stepSelect(list[StrLit] features), MLOpsStore s, PID pid) {
@@ -128,7 +136,7 @@ MLOpsStore evalSelect(Select se:stepSelect(list[StrLit] features), MLOpsStore s,
     PythonCmd cmd = selectCmd("SELECT", strFeatures);
     PythonResponse res = sendJsonToPython(pid, cmd);
     reportResult(res, "SELECT", se.src);
-    return store(featureSelected(), s.targetVariable, s.trainedModelFilePath);
+    return store(s.name, featureSelected(), s.targetVariable, s.trainedModelFilePath, s.monitored, s.latency);
 }
 
 MLOpsStore evalTrans(Trans t:stepTrans(list[PrepTransform] transforms), MLOpsStore s, PID pid) {
@@ -157,7 +165,7 @@ MLOpsStore evalTrans(Trans t:stepTrans(list[PrepTransform] transforms), MLOpsSto
         PythonResponse res = sendJsonToPython(pid, cmd);
         reportResult(res, "TRANSFORM", t.src);
     }
-    return store(transformed(), s.targetVariable, s.trainedModelFilePath);
+    return store(s.name, transformed(), s.targetVariable, s.trainedModelFilePath, s.monitored, s.latency);
 }
 
 tuple[str tr, str feat, str strat] evalPrepTransform(prepFill(StrLit feature, FillStrategy strategy)) {
@@ -200,11 +208,11 @@ MLOpsStore evalModel(Model m:stepModel(modelTrain(Algorithm algo, StrLit path, s
         params[param.name] = param.val;
     }
     str p = evalStrLit(path);
-    str modelDir = (m.src.parent + p).path;
+    str modelDir = (m.src.parent + p).path + "/<s.name>";
     PythonCmd cmd = trainCmd("TRAIN", algo_as_string, params, modelDir);
     PythonResponse res = sendJsonToPython(pid, cmd);
     reportResult(res, "TRAIN", m.src);
-    return store(modelTrained(), s.targetVariable, res.modelFilePath);
+    return store(s.name, modelTrained(), s.targetVariable, res.modelFilePath, s.monitored, s.latency);
 }
 
 str evalAlgo(algoLR()) = "LinReg";
@@ -233,7 +241,7 @@ MLOpsStore evalEval(Eval e:stepEval(set[Metric] metrics), MLOpsStore s, PID pid)
         PythonResponse res = sendJsonToPython(pid, cmd);
         reportResult(res, "EVAL", e.src);
     }
-    return store(modelEvaluated(), s.targetVariable, s.trainedModelFilePath);
+    return store(s.name, modelEvaluated(), s.targetVariable, s.trainedModelFilePath, s.monitored, s.latency);
 }
 
 str evalMetric(mAccuracy()) = "acc";
@@ -249,42 +257,70 @@ str evalMetric(mMSE()) = "mse";
 str evalMetric(mRMSE()) = "rmse";
 
 MLOpsStore evalDeploy(Deploy d:stepDeploy(int port), MLOpsStore s) {
-    loc filePath = |file:///| + s.trainedModelFilePath;
-    str fastAPIApp = genFastAPIApp(filePath.file);
-    str dockerfile = genDockerfile(filePath.file, port);
-    str requirements = genRequirementsTXT();
-    writeFile(filePath.parent + "app.py", fastAPIApp);
-    writeFile(filePath.parent + "Dockerfile", dockerfile);
-    writeFile(filePath.parent + "requirements.txt", requirements);
-    showMessage(info("[DEPLOY] Generated deployement artifacts under <filePath.parent.path>", d.src));
-    return store(deployed(port), s.targetVariable, s.trainedModelFilePath);
+    showMessage(info("[DEPLOY] Gathered deployement information", d.src));
+    return store(s.name, deployed(port), s.targetVariable, s.trainedModelFilePath, s.monitored, s.latency);
 }
 
 MLOpsStore evalMonitor(Monitor mon:stepMonitor(set[DriftRule] driftRules, list[LatencyRule] latencyRule), MLOpsStore s, PID pid) {
+    if (!(deployed(_) := s.state)) {
+        throw noDeploymentDeclared("User inputs cannot be monitored without deployed model.");
+    }
+    list[str] methods = [];
     list[str] monitored = [];
+    list[int] windows = [];
+    list[real] thresholds = [];
     for (DriftRule driftRule <- driftRules) {
-        tuple[str feat, int win, real threshold] dRule = evalDriftRule(driftRule);
+        tuple[str meth, str feat, int win, real threshold] dRule = evalDriftRule(driftRule);
         if (dRule.feat == s.targetVariable) {
             throw targetSelectedForMonitoring("The target can not be selected as a monitored feature.");
         }
+        if (dRule.win < 500) {
+            throw windowTooSmall("The window for drift calculation is too small.");
+        }
+        if (dRule.threshold <= 0) {
+            throw invalidThreshold("The threshold cannot be negative or 0.");
+        }
+        methods += dRule.meth;
         monitored += dRule.feat;
+        windows += dRule.win;
+        thresholds += dRule.threshold;
     }
-    PythonCmd cmd = monitorCmd("MONITOR", monitored);
+    PythonCmd cmd = monitorCmd("MONITOR", methods, monitored, windows, thresholds);
     PythonResponse res = sendJsonToPython(pid, cmd);
     reportResult(res, "MONITOR", mon.src);
+    Maybe[int] ms = nothing();
     if (size(latencyRule) != 0) {
-        int ms = evalLatencyRule(latencyRule[0]);
+        int parsedMs = evalLatencyRule(latencyRule[0]);
+        if (parsedMs <= 0) {
+            throw invalidLatency("Latency cannot be smaller or equal to 0.");
+        }
+        ms = just(parsedMs);
     }
-    return s;
+    return store(s.name, s.state, s.targetVariable, s.trainedModelFilePath, size(monitored) != 0, ms);
 }
 
-tuple[str feat, int win, real threshold] evalDriftRule(ruleDrift(StrLit feature, int window, real threshold)) {
+tuple[str method, str feat, int win, real threshold] evalDriftRule(ruleDrift(DriftMethod dMethod, StrLit feature, int window, real threshold)) {
     str feat = evalStrLit(feature);
-    return <feat, window, threshold>;
+    str method = evalDriftMethod(dMethod);
+    return <method, feat, window, threshold>;
 }
 
 int evalLatencyRule(ruleLatency(int ms)) {
     return ms;
+}
+
+str evalDriftMethod(dmKS()) = "KS";
+
+str evalDriftMethod(dmChiSquare()) = "ChiSquare";
+
+void finalizeDeployment(MLOpsStore s) {
+    loc filePath = |file:///| + s.trainedModelFilePath;
+    str fastAPIApp = genFastAPIApp(filePath.file, s.monitored, s.latency);
+    str dockerfile = genDockerfile(filePath.file, s.state.port);
+    str requirements = genRequirementsTXT(s.monitored);
+    writeFile(filePath.parent + "app.py", fastAPIApp);
+    writeFile(filePath.parent + "Dockerfile", dockerfile);
+    writeFile(filePath.parent + "requirements.txt", requirements);
 }
 
 void reportResult(PythonResponse res, str step, loc l) {

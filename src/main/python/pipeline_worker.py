@@ -300,9 +300,16 @@ def main():
                 send_response("SUCCESS", f"Evaluated model with metric {metric}: {result}")
 
             elif cmd == "MONITOR":
+                methods = request["methods"]
                 features = request["features"]
+                windows = request["windows"]
+                thresholds = request["thresholds"]
+
                 deployment_artifact = joblib.load(context["path"])
                 deployment_artifact["baseline_df"] = context["baseline_df"][features]
+                deployment_artifact["methods"] = methods
+                deployment_artifact["windows"] = windows
+                deployment_artifact["thresholds"] = thresholds
                 joblib.dump(deployment_artifact, context["path"])
                 send_response("SUCCESS", f"Monitored features selected successfully: {features}")
 

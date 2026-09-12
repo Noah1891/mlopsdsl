@@ -13,7 +13,7 @@ data PythonCmd
   | transformCmd(str cmd, str action, str feature, str method)
   | trainCmd(str cmd, str algo, map[str, str] hyperparameters, str modelDir)
   | evalCmd(str cmd, str metric)
-  | monitorCmd(str cmd, list[str] features)
+  | monitorCmd(str cmd, list[str] methods, list[str] features, list[int] windows, list[real] thresholds)
   ;
 
 data PythonResponse

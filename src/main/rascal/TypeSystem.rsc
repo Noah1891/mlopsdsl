@@ -22,7 +22,7 @@ data ColumnType
     | tUnknown()
     ;
 
-data ColumnInfo = colInfo(ColumnType ctype) | colInfoEnc(ColumnType ctype, EncodingMethod method);
+data ColumnInfo = colInfo(ColumnType ctype) | colInfoEnc(ColumnType ctype, EncodingMethod method, ColumnType oType);
 
 alias Schema = map[str featName, ColumnInfo info];
 
@@ -70,6 +70,7 @@ data TypeException
     | unknownHyperparam(str cause)
     | hyperparamTypeMismatch(str cause)
     | schemaInferenceFailed(str cause)
+    | incompatibleMethod(str cause)
     ;
 
 Schema inferSchema(loc csvPath, PID pid) {
@@ -209,14 +210,15 @@ Schema checkAndApplyTransform(prepScale(StrLit feature, ScaleMethod _), Schema s
 Schema checkAndApplyTransform(prepEncode(StrLit feature, EncodingMethod method), Schema schema) {
     str feat = feature.content;
     requireColumn(schema, feat);
-    return schema + (feat: colInfoEnc(tInteger(), method));
+    ColumnType oldType = schema[feat].ctype;
+    return schema + (feat: colInfoEnc(tInteger(), method, oldType));
 }
 
 private void requireColumn(Schema schema, str feat) {
     if (feat notin schema) {
         throw unknownColumn("Column \'<feat>\' not found.");
     }
-    if (colInfoEnc(_, encOneHot()) := schema[feat]) {
+    if (colInfoEnc(_, encOneHot(), _) := schema[feat]) {
         throw unknownColumn("Column \'<feat>\' is no longer present due to it being onehot encoded.");
     }
 }
@@ -323,7 +325,27 @@ bool metricMatchesTask(mRMSE(), regression()) = true;
 default bool metricMatchesTask(Metric _, Task _) = false;
 
 void checkMonitor(stepMonitor(set[DriftRule] driftRules, list[LatencyRule] _), TypeStore store) {
+    Schema schema = store.schema;
     for (DriftRule driftRule <- driftRules) {
-        requireColumn(store.schema, driftRule.feature.content);
+        str feat = driftRule.feature.content;
+        if (feat notin schema) {
+            throw unknownColumn("Column \'<feat>\' not found.");
+        }
+        ColumnType oldType = schema[feat].ctype;
+        if (colInfoEnc(_,_,oType) := schema[feat]) {
+            oldType = oType;
+        }
+        switch(driftRule.dMethod) {
+            case dmKS(): {
+                if (oldType notin {tInteger(), tFloat()}) {
+                    throw incompatibleMethod("The Kolmogorow-Smirnow method is only used for numerical features but <feat> is type <oldType>");
+                }
+            }
+            case dmChiSquare(): {
+                if (!(oldType is tCategorical)) {
+                    throw incompatibleMethod("The Chi² method is only used for categorical features but <feat> is type <oldType>");
+                }
+            }
+        }
     }
 }

@@ -57,7 +57,9 @@ syntax Metric = mAccuracy: "accuracy"
                 | mMSE: "mse"
                 | mRMSE: "rmse";
 
-syntax DriftRule = ruleDrift: "drift" "(" "feature" "=" StrLit feature "," "window" "=" IntLit window ")" "\<=" FloatLit threshold;
+syntax DriftRule = ruleDrift: DriftMethod dMethod "(" "feature" "=" StrLit feature "," "window" "=" IntLit window ")" "\<=" FloatLit threshold;
+
+syntax DriftMethod = dmKS: "driftKS" | dmChiSquare: "driftChiSquare";
 
 syntax LatencyRule = ruleLatency: "latency" "\<=" IntLit ms;
 

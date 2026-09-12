@@ -21,7 +21,7 @@ pipeline demo {
     )
     
     model LogReg (
-        dir = "../../../models/demo",
+        dir = "../../../models/",
         penalty = "l2",
         max_iter = 150
     )
@@ -36,6 +36,7 @@ pipeline demo {
     )
 
     monitoring (
-        drift(feature = "Pclass", window = 500) <= 0.05
+        driftKS(feature = "Pclass", window = 500) <= 0.05,
+        latency <= 500
     )
 }
