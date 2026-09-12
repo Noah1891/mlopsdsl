@@ -23,6 +23,7 @@ context = {
     "selected_features": [],
     "transformers": {},
     "transform_log": [],
+    "first_transform": True,
     "baseline_df": None,
     "model": None,
     "path": None,
@@ -145,8 +146,10 @@ def main():
                 feature = request["feature"]
                 method = request["method"]
 
-                source = context["X_train"] if context["X_train"] is not None else context["df"]
-                context["baseline_df"] = source.copy()
+                if context["first_transform"]:
+                    source = context["X_train"] if context["X_train"] is not None else context["df"]
+                    context["baseline_df"] = source.copy()
+                    context["first_transform"] = False
 
                 context["transform_log"] += [(action, feature, method)]
                 
@@ -229,6 +232,10 @@ def main():
                 algo = request["algo"]
                 hyperparams = request["hyperparameters"]
                 model_dir = request["modelDir"]
+
+                if context["first_transform"]:
+                    source = context["X_train"] if context["X_train"] is not None else context["df"]
+                    context["baseline_df"] = source.copy()
                 
                 if context["X_train"] is None:
                     context["X_train"] = context["df"]

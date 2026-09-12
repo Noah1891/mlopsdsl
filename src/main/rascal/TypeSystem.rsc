@@ -15,13 +15,14 @@ import Syntax;
 import PythonBridge;
 
 data ColumnType
-    = tNumeric()
+    = tInteger()
+    | tFloat()
     | tCategorical()
     | tBoolean()
     | tUnknown()
     ;
 
-data ColumnInfo = colInfo(ColumnType ctype, int rowCount, int cardinality);
+data ColumnInfo = colInfo(ColumnType ctype) | colInfoEnc(ColumnType ctype, EncodingMethod method);
 
 alias Schema = map[str featName, ColumnInfo info];
 
@@ -38,10 +39,8 @@ data ParamType
 
 alias ParamSignature = map[str name, ParamType ptype];
 
-data ColumnInfoJson = columnInfoJson(str \type, int rowCount, int cardinality);
+data ColumnInfoJson = columnInfoJson(str \type);
 data SchemaJson = schemaJson(map[str, ColumnInfoJson] columns);
-
-int CLASSIFICATION_CARDINALITY_THRESHOLD = 20;
 
 map[Algorithm, ParamSignature] ALGO_SIGNATURES = (
     AST::algoLR(): (
@@ -100,12 +99,14 @@ Schema inferSchema(loc csvPath, PID pid) {
     Schema schema = ();
     for (str col <- resp.columns) {
         ColumnInfoJson entry = resp.columns[col];
-        schema[col] = colInfo(parseColumnType(entry.\type), entry.rowCount, entry.cardinality);
+        schema[col] = colInfo(parseColumnType(entry.\type));
     }
     return schema;
 }
 
-ColumnType parseColumnType("numeric") = tNumeric();
+ColumnType parseColumnType("integer") = tInteger();
+
+ColumnType parseColumnType("float") = tFloat();
 
 ColumnType parseColumnType("categorical") = tCategorical();
 
@@ -190,7 +191,7 @@ TypeStore checkTrans(stepTrans(list[PrepTransform] transforms), TypeStore store)
 Schema checkAndApplyTransform(prepFill(StrLit feature, FillStrategy strategy), Schema schema) {
     str feat = feature.content;
     requireColumn(schema, feat);
-    if ((strategy is fillMean || strategy is fillMedian) && schema[feat].ctype != tNumeric()) {
+    if ((strategy is fillMean || strategy is fillMedian) && (schema[feat].ctype notin {tInteger(), tFloat()})) {
         throw incompatibleTransform("fillna(mean/median) requires a numeric column, but \'<feat>\' is <schema[feat].ctype>.");
     }
     return schema;
@@ -199,7 +200,7 @@ Schema checkAndApplyTransform(prepFill(StrLit feature, FillStrategy strategy), S
 Schema checkAndApplyTransform(prepScale(StrLit feature, ScaleMethod _), Schema schema) {
     str feat = feature.content;
     requireColumn(schema, feat);
-    if (schema[feat].ctype != tNumeric()) {
+    if (schema[feat].ctype notin {tInteger(), tFloat()}) {
         throw incompatibleTransform("scale(...) requires a numeric column, but \'<feat>\' is <schema[feat].ctype>.");
     }
     return schema;
@@ -208,16 +209,15 @@ Schema checkAndApplyTransform(prepScale(StrLit feature, ScaleMethod _), Schema s
 Schema checkAndApplyTransform(prepEncode(StrLit feature, EncodingMethod method), Schema schema) {
     str feat = feature.content;
     requireColumn(schema, feat);
-    if (method is encOneHot) {
-        return delete(schema, feat);
-    } else {
-        return schema + (feat: colInfo(tNumeric(), schema[feat].rowCount, schema[feat].cardinality));
-    }
+    return schema + (feat: colInfoEnc(tInteger(), method));
 }
 
 private void requireColumn(Schema schema, str feat) {
     if (feat notin schema) {
-        throw unknownColumn("Column \'<feat>\' not found (it may have been removed by a prior one-hot encoding, or never existed).");
+        throw unknownColumn("Column \'<feat>\' not found.");
+    }
+    if (colInfoEnc(_, encOneHot()) := schema[feat]) {
+        throw unknownColumn("Column \'<feat>\' is no longer present due to it being onehot encoded.");
     }
 }
 
@@ -229,19 +229,18 @@ TypeStore checkModel(stepModel(ModelExpr expr), TypeStore store) {
 
     switch (task) {
         case regression(): {
-            if (targetInfo.ctype != tNumeric()) {
+            if (targetInfo.ctype notin {tInteger(), tFloat()}) {
                 throw incompatibleTarget("Algorithm is a regression model and requires a numeric target, but \'<target>\' is <targetInfo.ctype>.");
             }
         }
         case classification(): {
             bool ok = targetInfo.ctype == tCategorical()
                    || targetInfo.ctype == tBoolean()
-                   || (targetInfo.ctype == tNumeric() && targetInfo.cardinality <= CLASSIFICATION_CARDINALITY_THRESHOLD);
+                   || (targetInfo.ctype == tInteger());
             if (!ok) {
                 throw incompatibleTarget(
-                    "Algorithm is a classification model and requires a categorical/boolean target " +
-                    "or a low-cardinality numeric target (\<= <CLASSIFICATION_CARDINALITY_THRESHOLD> distinct values), " +
-                    "but \'<target>\' is <targetInfo.ctype> with cardinality <targetInfo.cardinality>."
+                    "Algorithm is a classification model and requires a categorical/boolean/integer target " +
+                    "but \'<target>\' is <targetInfo.ctype>."
                 );
             }
         }

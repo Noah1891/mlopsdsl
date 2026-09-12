@@ -148,7 +148,9 @@ MLOpsStore evalTrans(Trans t:stepTrans(list[PrepTransform] transforms), MLOpsSto
         if ([*_, "scale", *_, "fillna", *_] := transforms_per_feature || [*_, "scale", *_, "encode", *_] := transforms_per_feature) {
             throw transformOrderViolation("Scaling must be the last transformation of a feature.");
         }
-
+        if ([*_, "encode", *_, "fillna", *_] := transforms_per_feature) {
+            throw transformOrderViolation("Missing values must be filled before encoding a feature.");
+        }
     }
     for (tuple[str tr, str feat, str param] ptrans <- trans) {
         PythonCmd cmd = transformCmd("TRANSFORM", ptrans.tr, ptrans.feat, ptrans.param);

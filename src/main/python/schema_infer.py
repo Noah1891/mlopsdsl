@@ -6,10 +6,13 @@ def infer_type(series):
     if pd.api.types.is_bool_dtype(series):
         return "boolean"
     if pd.api.types.is_numeric_dtype(series):
-        distinct = series.dropna().unique()
+        clean_series = series.dropna()
+        distinct = clean_series.unique()
         if len(distinct) == 2 and set(distinct).issubset({0, 1}):
             return "boolean"
-        return "numeric"
+        if pd.api.types.is_integer_dtype(series) or (clean_series % 1 == 0).all():
+            return "integer"
+        return "float"
     return "categorical"
 
 def main():
@@ -18,9 +21,7 @@ def main():
     columns = {}
     for col in df.columns:
         columns[col] = {
-            "type": infer_type(df[col]),
-            "rowCount": int(df[col].count()),
-            "cardinality": int(df[col].nunique(dropna=True))
+            "type": infer_type(df[col])
         }
     print(json.dumps({"columns": columns}))
 

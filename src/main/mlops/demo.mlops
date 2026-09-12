@@ -34,4 +34,8 @@ pipeline demo {
     deployment (
         port = 8000
     )
+
+    monitoring (
+        drift(feature = "Pclass", window = 500) <= 0.05
+    )
 }
