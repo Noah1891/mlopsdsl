@@ -5,7 +5,7 @@ pipeline demo {
     )
 
     split (
-        train_size = 0.7,
+        train_size = 0.75,
         random_state = 10
     )
 
@@ -15,7 +15,6 @@ pipeline demo {
         
     transformation (
         fillna("Age", mean),
-        fillna("Sex", mode),
         encode("Pclass", onehot),
         encode("Sex", onehot),
         scale("Fare", std)

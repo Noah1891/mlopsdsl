@@ -10,8 +10,8 @@ import String;
 import Syntax;
 import Interpreter;
 import TypeSystem;
-import Generator;
 import Checker;
+import Outline;
 
 start[Pipeline] pipelineParsingService(str s, loc l) =
     parse(#start[Pipeline], s, l, allowRecovery=true);
@@ -20,6 +20,7 @@ set[LanguageService] pipelineLanguageServices() = {
     parsing(pipelineParsingService),
     analysis(mlopsAnalysisService, providesImplementations = false),
     build(mlopsBuildService, providesImplementations = false),
+    documentSymbol(mlopsDocumentSymbolService),
     codeLens(pipelineCodeLenseService),
     execution(pipelineExecutionService)
 };

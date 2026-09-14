@@ -261,7 +261,7 @@ MLOpsStore evalDeploy(Deploy d:stepDeploy(int port), MLOpsStore s) {
     return store(s.name, deployed(port), s.targetVariable, s.trainedModelFilePath, s.monitored, s.latency);
 }
 
-MLOpsStore evalMonitor(Monitor mon:stepMonitor(set[DriftRule] driftRules, list[LatencyRule] latencyRule), MLOpsStore s, PID pid) {
+MLOpsStore evalMonitor(Monitor mon:stepMonitor(list[DriftRule] driftRules, list[LatencyRule] latencyRule), MLOpsStore s, PID pid) {
     if (!(deployed(_) := s.state)) {
         throw noDeploymentDeclared("User inputs cannot be monitored without deployed model.");
     }

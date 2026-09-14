@@ -9,6 +9,7 @@ import String;
 import List;
 import Set;
 import util::Maybe;
+import util::Math;
 
 import Syntax;
 import AST;
@@ -97,7 +98,8 @@ MLOpsStore checkStepsSem(AST::Pipeline input, MLOpsStore store) {
     store = checkModelSem(steps.model, store);
     if (size(steps.monitor) != 0) {
         if (size(steps.deploy) == 0) {
-            store.messages += {<steps.monitor[0].src, error("User inputs cannot be monitored without deployed model.",steps.monitor[0].src)>};
+            store.messages += {<steps.monitor[0].src, error("User inputs cannot be monitored without deployed model.", steps.monitor[0].src,
+                fixes=prepareNoDeploymentFixes(steps.monitor[0].src))>};
         } else {
             store = checkMonitorSem(steps.monitor[0], store);
         }
@@ -121,12 +123,16 @@ MLOpsStore checkSplitSem(AST::Split split, MLOpsStore store) {
 
 MLOpsStore checkSelectSem(AST::Select select, MLOpsStore store) {
     set[str] seen = {};
-    for (StrLit f <- select.features) {
+    list[loc] featureLocs = [f.src | f <- select.features];
+    for (int i <- [0..size(select.features)]) {
+        AST::StrLit f = select.features[i];
         if (f.content == store.targetVariable) {
-            store.messages += {<f.src, error("The target column cannot be a feature.", f.src)>};
+            store.messages += {<f.src, error("The target column cannot be a feature.", f.src,
+                fixes=removeEntryFix("Remove target from selected features", featureLocs, i))>};
         }
         if (f.content in seen) {
-            store.messages += {<f.src, error("Feature \'<f.content>\' is selected more than once.", f.src)>};
+            store.messages += {<f.src, error("Feature \'<f.content>\' is selected more than once.", f.src,
+                fixes=removeEntryFix("Remove duplicate feature", featureLocs, i))>};
         } else {
             seen += {f.content};
         }
@@ -136,11 +142,14 @@ MLOpsStore checkSelectSem(AST::Select select, MLOpsStore store) {
 
 MLOpsStore checkTransSem(AST::Trans trans, MLOpsStore store) {
     map[str feat, lrel[str tr, loc src] entries] byFeature = ();
-    for (PrepTransform pt <- trans.transforms) {
+    list[loc] transformLocs = [pt.feature.src | pt <- trans.transforms];
+    for (int i <- [0..size(trans.transforms)]) {
+        AST::PrepTransform pt = trans.transforms[i];
         tuple[str tr, str feat] ptrans = evalPrepTransform(pt);
         loc src = pt.feature.src;
         if (ptrans.feat == store.targetVariable) {
-            store.messages += {<src, error("The target column cannot be transformed.", src)>};
+            store.messages += {<src, error("The target column cannot be transformed.", src,
+                fixes=removeEntryFix("Remove transformation of target column", transformLocs, i))>};
             continue;
         }
         byFeature[ptrans.feat] = (ptrans.feat in byFeature ? byFeature[ptrans.feat] : []) + <ptrans.tr, src>;
@@ -150,8 +159,10 @@ MLOpsStore checkTransSem(AST::Trans trans, MLOpsStore store) {
         bool sawScale = false;
         bool sawEncode = false;
         for (<str tr, loc src> <- byFeature[feat]) {
+            int idx = indexOf(transformLocs, src);
             if (tr in seenTrans) {
-                store.messages += {<src, error("Feature must not be transformed multiple times by the same method.", src)>};
+                store.messages += {<src, error("Feature must not be transformed multiple times by the same method.", src
+                    fixes=removeEntryFix("Remove duplicate transformation", transformLocs, idx))>};
             } else {
                 seenTrans += {tr};
             }
@@ -199,7 +210,8 @@ MLOpsStore checkHyperparamsSem(AST::ModelExpr expr, MLOpsStore store) {
     ParamSignature sig = signatureOf(expr.algo);
     for (Param p <- expr.hyperParams) {
         if (p.name notin sig) {
-            store.messages += {<p.src, error("\'<p.name>\' is not a valid hyperparameter for <expr.algo.name>.", p.src)>};
+            store.messages += {<p.src, error("\'<p.name>\' is not a valid hyperparameter for <expr.algo.name>.", p.src,
+                fixes=invalidParamNameFixes(p.src, p.name, sig))>};
             continue;
         }
         if (!paramTypeMatches(p.val, sig[p.name])) {
@@ -242,12 +254,23 @@ bool paramTypeMatches(strLit(strLit(str s)), ptEnum(set[str] allowed)) = s in al
 default bool paramTypeMatches(Lit _, ParamType _) = false;
 
 MLOpsStore checkMonitorSem(AST::Monitor monitor, MLOpsStore store) {
-    for (DriftRule driftRule <- monitor.driftRules) {
+    list[loc] ruleLocs = [dr.src | dr <- monitor.driftRules];
+    set[str] seenFeatures = {};
+    for (int i <- [0..size(monitor.driftRules)]) {
+        AST::DriftRule driftRule = monitor.driftRules[i];
         tuple[str feat, int win, real threshold] dRule = <driftRule.feature.content, driftRule.window, driftRule.threshold>;
 
         if (dRule.feat == store.targetVariable) {
-            store.messages += {<driftRule.src, error("The target can not be selected as a monitored feature.", driftRule.src)>};
+            store.messages += {<driftRule.src, error("The target can not be selected as a monitored feature.", driftRule.src,
+                fixes=removeEntryFix("Remove monitoring of target column", ruleLocs, i))>};
             continue;
+        }
+        if (dRule.feat in seenFeatures) {
+            store.messages += {<driftRule.src, error("Feature \'<dRule.feat>\' is monitored more than once.", driftRule.src,
+                fixes=removeEntryFix("Remove duplicate monitoring of feature", ruleLocs, i))>};
+            continue;
+        } else {
+            seenFeatures += {dRule.feat};
         }
         if (dRule.win < 500) {
             store.messages += {<driftRule.src, error("The window for drift calculation is too small.", driftRule.src)>};
@@ -356,7 +379,8 @@ TypeStore checkStepsType(AST::Pipeline input, TypeStore store) {
 
 TypeStore checkLoadType(AST::Load load, TypeStore store) {
     if (load.target.content notin store.schema) {
-        store.messages += {<load.target.src, error("Target column \'<load.target.content>\' not found in dataset.", load.target.src)>};
+        store.messages += {<load.target.src, error("Target column \'<load.target.content>\' not found in dataset.", load.target.src,
+            fixes=schemaSuggestionFixes(load.target.src, load.target.content, store.schema))>};
     }
     return tStore(load.target.content, store.schema, null(), store.messages);
 }
@@ -430,7 +454,8 @@ TypeStore checkAndApplyTransform(prepEncode(StrLit feature, EncodingMethod metho
 rel[loc, Message] requireColumnSelect(Schema schema, StrLit feat) {
     rel[loc, Message] messages = {};
     if (feat.content notin schema) {
-        messages += {<feat.src, error("Column \'<feat.content>\' not found in dataset.", feat.src)>};
+        messages += {<feat.src, error("Column \'<feat.content>\' not found in dataset.", feat.src,
+            fixes=schemaSuggestionFixes(feat.src, feat.content, schema))>};
     }
     return messages;
 }
@@ -438,7 +463,8 @@ rel[loc, Message] requireColumnSelect(Schema schema, StrLit feat) {
 rel[loc, Message] requireColumn(Schema schema, StrLit feat) {
     rel[loc, Message] messages = {};
     if (feat.content notin schema) {
-        messages += {<feat.src, error("Column \'<feat.content>\' not part of selected features.", feat.src)>};
+        messages += {<feat.src, error("Column \'<feat.content>\' not part of selected features.", feat.src,
+            fixes=schemaSuggestionFixes(feat.src, feat.content, schema))>};
     } else if (colInfoEnc(_, encOneHot(), _) := schema[feat.content]){
         messages += {<feat.src, error("Column \'<feat.content>\' is no longer present due to it being onehot encoded.", feat.src)>};
     }
@@ -481,13 +507,14 @@ Task taskOf(algoRF()) = classification();
 
 Task taskOf(algoLogReg()) = classification();
 
-TypeStore checkMonitorTypes(stepMonitor(set[DriftRule] driftRules, list[LatencyRule] _), TypeStore store) {
+TypeStore checkMonitorTypes(AST::Monitor monitor, TypeStore store) {
     Schema schema = store.schema;
-    for (DriftRule driftRule <- driftRules) {
+    for (DriftRule driftRule <- monitor.driftRules) {
         StrLit feat = driftRule.feature;
         rel[loc, Message] msgs = {};
         if (feat.content notin schema) {
-            msgs += {<feat.src, error("Column \'<feat.content>\' not part of selected features.", feat.src)>};
+            msgs += {<feat.src, error("Column \'<feat.content>\' not part of selected features.", feat.src,
+                fixes=schemaSuggestionFixes(feat.src, feat.content, schema))>};
         }
         store.messages += msgs;
         if (size(msgs) != 0) {
@@ -511,4 +538,93 @@ TypeStore checkMonitorTypes(stepMonitor(set[DriftRule] driftRules, list[LatencyR
         }
     }
     return tStore(store.target, store.schema, store.task, store.messages);
+}
+
+list[CodeAction] prepareNoDeploymentFixes(loc src)
+    = [
+        action(title="Remove monitoring step", edits=[changed(src.top, [replace(src, "")])]),
+        action(title="Add deployment step before monitoring", edits=[changed(src.top, [replace(insertionPointBefore(src), deploymentSnippet(src))])])
+      ];
+
+loc insertionPointBefore(loc src) = src[length=0][end=src.begin];
+
+str deploymentSnippet(loc src) {
+    str ind = intercalate("", [" " | _ <- [0..src.begin.column]]);
+    str innerInd = ind + "    ";
+    return "deployment (\n"
+         + innerInd + "port = 8000\n"
+         + ind + ")\n"
+         + "\n"
+         + ind;
+}
+
+loc removeEntryLoc(list[loc] \all, int idx) {
+    loc item = \all[idx];
+    if (size(\all) == 1) {
+        return item;
+    }
+    if (idx == size(\all) - 1) {
+        loc prev = \all[idx - 1];
+        int startOffset = prev.offset + prev.length;
+        int endOffset = item.offset + item.length;
+        return item.top[offset=startOffset][length=endOffset-startOffset][begin=prev.end][end=item.end];
+    }
+    loc next = \all[idx + 1];
+    int startOffset = item.offset;
+    int endOffset = next.offset;
+    return item.top[offset=startOffset][length=endOffset-startOffset][begin=item.begin][end=next.begin];
+}
+
+list[CodeAction] removeEntryFix(str title, list[loc] \all, int idx)
+    = [action(title=title, edits=[changed(\all[idx].top, [replace(removeEntryLoc(\all, idx), "")])])];
+
+loc paramNameLoc(loc paramSrc, str name) {
+    int len = size(name);
+    return paramSrc[length=len][end=<paramSrc.begin.line, paramSrc.begin.column + len>];
+}
+
+list[CodeAction] invalidParamNameFixes(loc paramSrc, str invalidName, ParamSignature sig) {
+    loc target = paramNameLoc(paramSrc, invalidName);
+    list[str] validNames = [n | n <- sig];
+    return [
+        action(title="Replace with \'<validName>\'", edits=[changed(target.top, [replace(target, validName)])])
+        | str validName <- validNames
+    ];
+}
+
+int levenshtein(str a, str b) {
+    list[int] la = chars(a);
+    list[int] lb = chars(b);
+    int m = size(la);
+    int n = size(lb);
+    list[list[int]] d = [[0 | _ <- [0..n+1]] | _ <- [0..m+1]];
+
+    for (int i <- [0..m+1]) {
+        d[i][0] = i;
+    }
+    for (int j <- [0..n+1]) {
+        d[0][j] = j;
+    }
+
+    for (int i <- [1..m+1]) {
+        for (int j <- [1..n+1]) {
+            int cost = (la[i-1] == lb[j-1]) ? 0 : 1;
+            d[i][j] = min([
+                d[i-1][j] + 1,
+                d[i][j-1] + 1,
+                d[i-1][j-1] + cost
+            ]);
+        }
+    }
+    return d[m][n];
+}
+
+list[CodeAction] schemaSuggestionFixes(loc src, str invalidName, Schema schema) {
+    list[str] names = [n | n <- schema];
+    lrel[int dist, str name] ranked = sort([<levenshtein(invalidName, n), n> | n <- names]);
+    list[str] topNames = [name | <int _, str name> <- ranked][0..min(5, size(ranked))];
+    return [
+        action(title="Replace with \'<n>\'", edits=[changed(src.top, [replace(src, "\"<n>\"")])])
+        | str n <- topNames
+    ];
 }

@@ -18,7 +18,7 @@ data Eval(loc src=|unknown:///|) = stepEval(set[Metric] metrics);
 
 data Deploy(loc src=|unknown:///|) = stepDeploy(int port);
 
-data Monitor(loc src=|unknown:///|) = stepMonitor(set[DriftRule] driftRules, list[LatencyRule] latencyRule);
+data Monitor(loc src=|unknown:///|) = stepMonitor(list[DriftRule] driftRules, list[LatencyRule] latencyRule);
 
 data PrepTransform(loc src=|unknown:///|) = prepFill(StrLit feature, FillStrategy strategy)
   | prepEncode(StrLit feature, EncodingMethod encodeMethod)

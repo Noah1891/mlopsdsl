@@ -9,7 +9,7 @@ syntax Steps = steps: Load load Split? split Select? select Trans? trans Model m
 
 syntax Load = stepLoad: "load" "(" "path" "=" StrLit path "," "target" "=" StrLit target ")";
 
-syntax Split = stepSplit: "split" "(" "train_size" "=" FloatLit "," ("random_state" "=" IntLit)? ")";
+syntax Split = stepSplit: "split" "(" "train_size" "=" FloatLit trainSize  ("," "random_state" "=" IntLit randomState)? ")";
 
 syntax Select = stepSelect: "select" "(" "features" "=" "[" { StrLit ","}+ features "]" ")";
 

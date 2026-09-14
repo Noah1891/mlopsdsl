@@ -327,7 +327,7 @@ bool metricMatchesTask(mRMSE(), regression()) = true;
 
 default bool metricMatchesTask(Metric _, Task _) = false;
 
-void checkMonitor(stepMonitor(set[DriftRule] driftRules, list[LatencyRule] _), TypeStore store) {
+void checkMonitor(stepMonitor(list[DriftRule] driftRules, list[LatencyRule] _), TypeStore store) {
     Schema schema = store.schema;
     for (DriftRule driftRule <- driftRules) {
         str feat = driftRule.feature.content;
