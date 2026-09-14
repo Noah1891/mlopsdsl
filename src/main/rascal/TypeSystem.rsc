@@ -40,7 +40,7 @@ data ParamType
 alias ParamSignature = map[str name, ParamType ptype];
 
 data ColumnInfoJson = columnInfoJson(str \type);
-data SchemaJson = schemaJson(map[str, ColumnInfoJson] columns);
+data SchemaJson = schemaJson(str status, map[str, ColumnInfoJson] columns = (), str message = "");
 
 map[Algorithm, ParamSignature] ALGO_SIGNATURES = (
     AST::algoLR(): (
@@ -96,6 +96,9 @@ Schema inferSchema(loc csvPath, PID pid) {
     killProcess(pid, force=true);
 
     SchemaJson resp = parseJSON(#SchemaJson, trim(rawResponse));
+    if (resp.status == "ERROR") {
+        throw schemaInferenceFailed(resp.message);
+    }
 
     Schema schema = ();
     for (str col <- resp.columns) {

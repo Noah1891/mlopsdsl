@@ -15,6 +15,7 @@ pipeline demo {
         
     transformation (
         fillna("Age", mean),
+        fillna("Sex", mode),
         encode("Pclass", onehot),
         encode("Sex", onehot),
         scale("Fare", std)

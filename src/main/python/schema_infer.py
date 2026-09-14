@@ -1,6 +1,7 @@
 import sys
 import json
 import pandas as pd
+from pathlib import Path
 
 def infer_type(series):
     if pd.api.types.is_bool_dtype(series):
@@ -17,13 +18,16 @@ def infer_type(series):
 
 def main():
     path = sys.argv[1]
-    df = pd.read_csv(path)
+    try:
+        df = pd.read_csv(path)
+    except FileNotFoundError:
+        print(json.dumps({"status": "ERROR", "message": f"File not found: {Path(path).resolve()}"}))
     columns = {}
     for col in df.columns:
         columns[col] = {
             "type": infer_type(df[col])
         }
-    print(json.dumps({"columns": columns}))
+    print(json.dumps({"status": "SUCCESS", "columns": columns}))
 
 if __name__ == "__main__":
     main()

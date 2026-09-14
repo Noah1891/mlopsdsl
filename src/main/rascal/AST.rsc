@@ -39,9 +39,9 @@ data ScaleMethod(loc src=|unknown:///|) = scaleMinMax()
 
 data ModelExpr(loc src=|unknown:///|) = modelTrain(Algorithm algo, StrLit dir, set[Param] hyperParams);
 
-data Algorithm(loc src=|unknown:///|) = algoLR()
-               | algoRF()
-               | algoLogReg();
+data Algorithm(loc src=|unknown:///|) = algoLR(str name="Linear Regression")
+               | algoRF(str name="Random Forest")
+               | algoLogReg(str name="Logistic Regression");
 
 data Param(loc src=|unknown:///|) = hp(str name, Lit val);
 
