@@ -5,7 +5,7 @@ pipeline demo {
     )
 
     split (
-        train_size = 0.75,
+        train_size = 0.7,
         random_state = 10
     )
 

@@ -66,8 +66,8 @@ syntax LatencyRule = ruleLatency: "latency" "\<=" IntLit ms;
 syntax StrLit = strLit: "\"" StrContent content "\"";
   
 lexical Id = [a-zA-Z_][a-zA-Z0-9_]* !>> [a-zA-Z0-9_] \ Keywords;
-lexical IntLit   = [0-9]+;
-lexical FloatLit = [0-9]+ "." [0-9]+;
+lexical IntLit   = "-"? [0-9]+;
+lexical FloatLit = "-"? [0-9]+ "." [0-9]+;
 lexical BoolLit = "true" | "false";
 lexical StrContent = ![\"]*;
 

@@ -20,9 +20,6 @@ data Deploy(loc src=|unknown:///|) = stepDeploy(int port);
 
 data Monitor(loc src=|unknown:///|) = stepMonitor(set[DriftRule] driftRules, list[LatencyRule] latencyRule);
 
-data DataSource(loc src=|unknown:///|) = srcCsv(StrLit path)
-                | srcDb(StrLit conn, StrLit query);
-
 data PrepTransform(loc src=|unknown:///|) = prepFill(StrLit feature, FillStrategy strategy)
   | prepEncode(StrLit feature, EncodingMethod encodeMethod)
   | prepScale(StrLit feature, ScaleMethod scaleMethod);

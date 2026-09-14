@@ -8,10 +8,13 @@ import lang::json::IO;
 import String;
 import List;
 import Set;
+import util::Maybe;
 
 import Syntax;
 import AST;
 import PythonBridge;
+
+data MLOpsStore = mStore(str targetVariable, rel[loc, Message] messages);
 
 data ColumnType
     = tInteger()
@@ -69,7 +72,205 @@ Summary mlopsBuildService(loc l , start[Pipeline] input)
 
 Summary mlopsSummaryServiceSem(loc l, AST::Pipeline input) {
     Summary s = summary(l);
+    MLOpsStore store = initMLOpsStore();
+    store = checkStepsSem(input, store);
+    s.messages += store.messages;
     return s;
+}
+
+MLOpsStore initMLOpsStore() {
+    return mStore("", {});
+}
+
+MLOpsStore checkStepsSem(AST::Pipeline input, MLOpsStore store) {
+    AST::Steps steps = input.steps;
+    store = checkLoadSem(steps.load, store);
+    if (size(steps.split) != 0) {
+        store = checkSplitSem(steps.split[0], store);
+    }
+    if (size(steps.select) != 0) {
+        store = checkSelectSem(steps.select[0], store);
+    }
+    if (size(steps.trans) != 0) {
+        store = checkTransSem(steps.trans[0], store);
+    }
+    store = checkModelSem(steps.model, store);
+    if (size(steps.monitor) != 0) {
+        if (size(steps.deploy) == 0) {
+            store.messages += {<steps.monitor[0].src, error("User inputs cannot be monitored without deployed model.",steps.monitor[0].src)>};
+        } else {
+            store = checkMonitorSem(steps.monitor[0], store);
+        }
+    }
+    return store;
+}
+
+MLOpsStore checkLoadSem(AST::Load load, MLOpsStore store) {
+    return mStore(load.target.content, store.messages);
+}
+
+MLOpsStore checkSplitSem(AST::Split split, MLOpsStore store) {
+    if (split.trainSize <= 0) {
+        store.messages += {<split.src, error("Train size is below 0.0",split.src)>};
+    }
+    if (split.trainSize >= 1) {
+        store.messages += {<split.src, error("Train size exceeds 1.0",split.src)>};
+    }
+    return mStore(store.targetVariable, store.messages);
+}
+
+MLOpsStore checkSelectSem(AST::Select select, MLOpsStore store) {
+    set[str] seen = {};
+    for (StrLit f <- select.features) {
+        if (f.content == store.targetVariable) {
+            store.messages += {<f.src, error("The target column cannot be a feature.", f.src)>};
+        }
+        if (f.content in seen) {
+            store.messages += {<f.src, error("Feature \'<f.content>\' is selected more than once.", f.src)>};
+        } else {
+            seen += {f.content};
+        }
+    }
+    return mStore(store.targetVariable, store.messages);
+}
+
+MLOpsStore checkTransSem(AST::Trans trans, MLOpsStore store) {
+    map[str feat, lrel[str tr, loc src] entries] byFeature = ();
+    for (PrepTransform pt <- trans.transforms) {
+        tuple[str tr, str feat] ptrans = evalPrepTransform(pt);
+        loc src = pt.feature.src;
+        if (ptrans.feat == store.targetVariable) {
+            store.messages += {<src, error("The target column cannot be transformed.", src)>};
+            continue;
+        }
+        byFeature[ptrans.feat] = (ptrans.feat in byFeature ? byFeature[ptrans.feat] : []) + <ptrans.tr, src>;
+    }
+    for (str feat <- byFeature) {
+        set[str] seenTrans = {};
+        bool sawScale = false;
+        bool sawEncode = false;
+        for (<str tr, loc src> <- byFeature[feat]) {
+            if (tr in seenTrans) {
+                store.messages += {<src, error("Feature must not be transformed multiple times by the same method.", src)>};
+            } else {
+                seenTrans += {tr};
+            }
+
+            if (sawScale && (tr == "fillna" || tr == "encode")) {
+                store.messages += {<src, error("Scaling must be the last transformation of a feature.", src)>};
+            }
+            if (tr == "scale") {
+                sawScale = true;
+            }
+
+            if (sawEncode && tr == "fillna") {
+                store.messages += {<src, error("Missing values must be filled before encoding a feature.", src)>};
+            }
+            if (tr == "encode") {
+                sawEncode = true;
+            }
+        }
+    }
+
+    return mStore(store.targetVariable, store.messages);
+}
+
+tuple[str tr, str feat] evalPrepTransform(prepFill(StrLit feature, FillStrategy _)) {
+    str feat = feature.content;
+    return <"fillna", feat>;
+}
+
+tuple[str tr, str feat] evalPrepTransform(prepEncode(StrLit feature, EncodingMethod _)) {
+    str feat = feature.content;
+    return <"encode", feat>;
+}
+
+tuple[str tr, str feat] evalPrepTransform(prepScale(StrLit feature, ScaleMethod _)) {
+    str feat = feature.content;
+    return <"scale", feat>;
+}
+
+MLOpsStore checkModelSem(AST::Model model, MLOpsStore store) {
+    store = checkHyperparamsSem(model.expr, store);
+    return mStore(store.targetVariable, store.messages);
+}
+
+MLOpsStore checkHyperparamsSem(AST::ModelExpr expr, MLOpsStore store) {
+    ParamSignature sig = signatureOf(expr.algo);
+    for (Param p <- expr.hyperParams) {
+        if (p.name notin sig) {
+            store.messages += {<p.src, error("\'<p.name>\' is not a valid hyperparameter for <expr.algo.name>.", p.src)>};
+            continue;
+        }
+        if (!paramTypeMatches(p.val, sig[p.name])) {
+            store.messages += {<p.val.src, error("\'<p.name>\' has an incompatible value: expected <sig[p.name]>.", p.val.src)>};
+        }
+    }
+    return mStore(store.targetVariable, store.messages);
+}
+
+ParamSignature signatureOf(algoLR()) = (
+    "fit_intercept": ptBool(),
+    "positive": ptBool()
+);
+
+ParamSignature signatureOf(algoRF()) = (
+    "n_estimators": ptInt(),
+    "max_depth": ptInt(),
+    "criterion": ptEnum({"gini", "entropy", "log_loss"}),
+    "bootstrap": ptBool(),
+    "random_state": ptInt()
+);
+
+ParamSignature signatureOf(algoLogReg()) = (
+    "max_iter": ptInt(),
+    "C": ptFloat(),
+    "penalty": ptEnum({"l1", "l2", "elasticnet", "none"}),
+    "random_state": ptInt()
+);
+
+bool paramTypeMatches(intLit(_), ptInt()) = true;
+
+bool paramTypeMatches(intLit(_), ptFloat()) = true;
+
+bool paramTypeMatches(floatLit(_), ptFloat()) = true;
+
+bool paramTypeMatches(boolLit(_), ptBool()) = true;
+
+bool paramTypeMatches(strLit(strLit(str s)), ptEnum(set[str] allowed)) = s in allowed;
+
+default bool paramTypeMatches(Lit _, ParamType _) = false;
+
+MLOpsStore checkMonitorSem(AST::Monitor monitor, MLOpsStore store) {
+    for (DriftRule driftRule <- monitor.driftRules) {
+        tuple[str feat, int win, real threshold] dRule = <driftRule.feature.content, driftRule.window, driftRule.threshold>;
+
+        if (dRule.feat == store.targetVariable) {
+            store.messages += {<driftRule.src, error("The target can not be selected as a monitored feature.", driftRule.src)>};
+            continue;
+        }
+        if (dRule.win < 500) {
+            store.messages += {<driftRule.src, error("The window for drift calculation is too small.", driftRule.src)>};
+            continue;
+        }
+        if (dRule.threshold <= 0) {
+            store.messages += {<driftRule.src, error("The threshold cannot be negative or 0.", driftRule.src)>};
+            continue;
+        }
+    }
+
+    Maybe[int] ms = nothing();
+    if (size(monitor.latencyRule) != 0) {
+        AST::LatencyRule lRule = monitor.latencyRule[0];
+        int parsedMs = lRule.ms;
+        if (parsedMs <= 0) {
+            store.messages += {<lRule.src, error("Latency cannot be smaller or equal to 0.", lRule.src)>};
+        } else {
+            ms = just(parsedMs);
+        }
+    }
+
+    return mStore(store.targetVariable, store.messages);
 }
 
 Summary mlopsSummaryServiceType(loc l, AST::Pipeline input) {
@@ -147,6 +348,9 @@ TypeStore checkStepsType(AST::Pipeline input, TypeStore store) {
         store = checkTransType(steps.trans[0], store);
     }
     store = checkModelType(steps.model, store);
+    if (size(steps.monitor) != 0) {
+        store = checkMonitorTypes(steps.monitor[0], store);
+    }
     return store;
 }
 
@@ -247,7 +451,7 @@ TypeStore checkModelType(AST::Model model, TypeStore store) {
     str target = store.target;
 
     if (target notin schema) {
-        store = checkHyperparams(model.expr, store);
+        return tStore(store.target, store.schema, task, store.messages);
     }
     ColumnInfo targetInfo = schema[target];
 
@@ -268,7 +472,6 @@ TypeStore checkModelType(AST::Model model, TypeStore store) {
             }
         }
     }
-    store = checkHyperparams(model.expr, store);
     return tStore(store.target, store.schema, task, store.messages);
 }
 
@@ -278,48 +481,34 @@ Task taskOf(algoRF()) = classification();
 
 Task taskOf(algoLogReg()) = classification();
 
-TypeStore checkHyperparams(AST::ModelExpr expr, TypeStore store) {
-    ParamSignature sig = signatureOf(expr.algo);
-    for (Param p <- expr.hyperParams) {
-        if (p.name notin sig) {
-            store.messages += {<p.src, error("\'<p.name>\' is not a valid hyperparameter for <expr.algo.name>.", p.src)>};
+TypeStore checkMonitorTypes(stepMonitor(set[DriftRule] driftRules, list[LatencyRule] _), TypeStore store) {
+    Schema schema = store.schema;
+    for (DriftRule driftRule <- driftRules) {
+        StrLit feat = driftRule.feature;
+        rel[loc, Message] msgs = {};
+        if (feat.content notin schema) {
+            msgs += {<feat.src, error("Column \'<feat.content>\' not part of selected features.", feat.src)>};
+        }
+        store.messages += msgs;
+        if (size(msgs) != 0) {
             continue;
         }
-        if (!paramTypeMatches(p.val, sig[p.name])) {
-            store.messages += {<p.val.src, error("\'<p.name>\' has an incompatible value: expected <sig[p.name]>.", p.val.src)>};
+        ColumnType oldType = store.schema[feat.content].ctype;
+        if (colInfoEnc(_,_,oType) := store.schema[feat.content]) {
+            oldType = oType;
+        }
+        switch(driftRule.dMethod) {
+            case dmKS(): {
+                if (oldType notin {tInteger(), tFloat()}) {
+                    store.messages += {<driftRule.dMethod.src, error("The Kolmogorow-Smirnow method is only used for numerical features but <feat.content> is type <oldType>", driftRule.dMethod.src)>};
+                }
+            }
+            case dmChiSquare(): {
+                if (!(oldType is tCategorical)) {
+                    store.messages += {<driftRule.dMethod.src, error("The Chi² method is only used for categorical features but <feat.content> is type <oldType>", driftRule.dMethod.src)>};
+                }
+            }
         }
     }
-    return store;
+    return tStore(store.target, store.schema, store.task, store.messages);
 }
-
-ParamSignature signatureOf(algoLR()) = (
-    "fit_intercept": ptBool(),
-    "positive": ptBool()
-);
-
-ParamSignature signatureOf(algoRF()) = (
-    "n_estimators": ptInt(),
-    "max_depth": ptInt(),
-    "criterion": ptEnum({"gini", "entropy", "log_loss"}),
-    "bootstrap": ptBool(),
-    "random_state": ptInt()
-);
-
-ParamSignature signatureOf(algoLogReg()) = (
-    "max_iter": ptInt(),
-    "C": ptFloat(),
-    "penalty": ptEnum({"l1", "l2", "elasticnet", "none"}),
-    "random_state": ptInt()
-);
-
-bool paramTypeMatches(intLit(_), ptInt()) = true;
-
-bool paramTypeMatches(intLit(_), ptFloat()) = true;
-
-bool paramTypeMatches(floatLit(_), ptFloat()) = true;
-
-bool paramTypeMatches(boolLit(_), ptBool()) = true;
-
-bool paramTypeMatches(strLit(strLit(str s)), ptEnum(set[str] allowed)) = s in allowed;
-
-default bool paramTypeMatches(Lit _, ParamType _) = false;

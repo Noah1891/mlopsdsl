@@ -20,8 +20,8 @@ import CodeGen;
 data PipelineState
     = uninitialized()
     | dataLoaded()
-    | dataSplitted()
-    | featureSelected()
+    | dataSplit()
+    | featuresSelected()
     | transformed()
     | modelTrained()
     | modelEvaluated()
@@ -119,7 +119,7 @@ MLOpsStore evalSplit(Split sp:stepSplit(real trainSize, list[int] randomState), 
     PythonCmd cmd = splitCmd("SPLIT", ratioStr, randomStateStr);
     PythonResponse res = sendJsonToPython(pid, cmd);
     reportResult(res, "SPLIT", sp.src);
-    return store(s.name, dataSplitted(), s.targetVariable, s.trainedModelFilePath, s.monitored, s.latency);
+    return store(s.name, dataSplit(), s.targetVariable, s.trainedModelFilePath, s.monitored, s.latency);
 }
 
 MLOpsStore evalSelect(Select se:stepSelect(list[StrLit] features), MLOpsStore s, PID pid) {
@@ -136,7 +136,7 @@ MLOpsStore evalSelect(Select se:stepSelect(list[StrLit] features), MLOpsStore s,
     PythonCmd cmd = selectCmd("SELECT", strFeatures);
     PythonResponse res = sendJsonToPython(pid, cmd);
     reportResult(res, "SELECT", se.src);
-    return store(s.name, featureSelected(), s.targetVariable, s.trainedModelFilePath, s.monitored, s.latency);
+    return store(s.name, featuresSelected(), s.targetVariable, s.trainedModelFilePath, s.monitored, s.latency);
 }
 
 MLOpsStore evalTrans(Trans t:stepTrans(list[PrepTransform] transforms), MLOpsStore s, PID pid) {
