@@ -1,0 +1,14 @@
+pipeline minimal_ex {
+    load (
+        path =" ../../../data/Titanic-Dataset.csv",
+        target = "Survived"
+    )
+
+    transformation (
+        encode("Pclass", onehot)
+    )
+
+    model LogReg (
+        dir = "../../../models",
+    )
+}

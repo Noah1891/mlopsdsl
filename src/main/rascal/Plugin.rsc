@@ -18,8 +18,15 @@ start[Pipeline] pipelineParsingService(str s, loc l) =
 
 set[LanguageService] pipelineLanguageServices() = {
     parsing(pipelineParsingService),
-    analysis(mlopsAnalysisService, providesImplementations = false),
-    build(mlopsBuildService, providesImplementations = false),
+    analysis(mlopsAnalysisService, 
+        providesHovers = false, providesDefinitions = false, 
+        providesReferences = false, providesImplementations = false),
+    build(mlopsBuildService, 
+        providesHovers = false, providesDefinitions = false, 
+        providesReferences = false, providesImplementations = false),
+    hover(mlopsHoverService),
+    definition(mlopsDefinitionService),
+    references(mlopsReferencesService),
     documentSymbol(mlopsDocumentSymbolService),
     codeLens(pipelineCodeLenseService),
     execution(pipelineExecutionService)

@@ -628,3 +628,65 @@ list[CodeAction] schemaSuggestionFixes(loc src, str invalidName, Schema schema) 
         | str n <- topNames
     ];
 }
+
+set[str] mlopsHoverService(Focus focus) {
+    if (focus == []) return {};
+    loc cursorLoc = focus[1].src;
+    AST::Pipeline input = implode(#AST::Pipeline, focus[-1]);
+    return computeDocs(input)[cursorLoc];
+}
+
+set[loc] mlopsDefinitionService(Focus focus) {
+    if (focus == []) return {};
+    loc cursorLoc = focus[1].src;
+    AST::Pipeline input = implode(#AST::Pipeline, focus[-1]);
+    <defs, uses> = computeDefsUses(input);
+    return (uses o defs)[cursorLoc];
+}
+
+set[loc] mlopsReferencesService(Focus focus) {
+    if (focus == []) return {};
+    loc cursorLoc = focus[1].src;
+    AST::Pipeline input = implode(#AST::Pipeline, focus[-1]);
+    <defs, uses> = computeDefsUses(input);
+    return (uses o defs)<1,0>[cursorLoc];
+}
+
+tuple[rel[str, loc] defs, rel[loc, str] uses] computeDefsUses(AST::Pipeline input) {
+    AST::Steps steps = input.steps;
+    rel[str, loc] defs = {};
+    rel[loc, str] uses = {};
+
+    if (size(steps.select) != 0) {
+        defs = {<f.content, f.src> | f <- steps.select[0].features};
+    }
+
+    if (size(defs) != 0) {
+        if (size(steps.trans) != 0) {
+            uses += {<pt.feature.src, pt.feature.content> | pt <- steps.trans[0].transforms};
+        }
+        if (size(steps.monitor) != 0) {
+            uses += {<dr.feature.src, dr.feature.content> | dr <- steps.monitor[0].driftRules};
+        }
+    }
+
+    return <defs, uses>;
+}
+
+rel[loc, str] computeDocs(AST::Pipeline input) {
+    AST::Steps steps = input.steps;
+    rel[loc, str] docs = {};
+
+    if (size(steps.select) != 0) {
+        docs += {<f.src, "*selected feature* <f.content>"> | f <- steps.select[0].features};
+    }
+    if (size(steps.trans) != 0) {
+        docs += {<pt.feature.src, "*transformed feature* <pt.feature.content> (<evalPrepTransform(pt).tr>)">
+                  | pt <- steps.trans[0].transforms};
+    }
+    if (size(steps.monitor) != 0) {
+        docs += {<dr.feature.src, "*monitored feature* <dr.feature.content>"> | dr <- steps.monitor[0].driftRules};
+    }
+
+    return docs;
+}

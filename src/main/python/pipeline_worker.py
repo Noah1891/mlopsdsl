@@ -260,13 +260,16 @@ def main():
 
                 try:
                     model = ALGORITHMS[algo](**typed_params)
-                except TypeError:
-                    send_response("ERROR", f"Hyperparameter included unexpected keyword.")
+                except TypeError as e:
+                    send_response("ERROR", f"Hyperparameter included unexpected keyword: {str(e)}")
                     continue
                 try:
                     model.fit(context["X_train"], context["y_train"])
-                except ValueError:
-                    send_response("ERROR", f"Hyperparameter has wrong type.")
+                except ValueError as e:
+                    send_response("ERROR",f"Model training failed: {str(e)}")
+                    continue
+                except TypeError as e:
+                    send_response("ERROR",f"Hyperparameter has wrong type: {str(e)}")
                     continue
                 context["model"] = model
                 
