@@ -154,7 +154,7 @@ TypeStore checkLoad(Load l:stepLoad(StrLit path, StrLit target)) {
     loc baseDir = l.src.parent;
     loc scriptPath = getPath("schema_infer.py");
     loc csvPath = baseDir + p;
-    PID pid = createProcess(|project://mlopsdsl/src/main/python/.mlopsenv/bin/python3|, args=[scriptPath, csvPath.top]);
+    PID pid = createProcess(PythonBridge::getPythonExecutable(), args=[scriptPath, csvPath.top]);
     if (!isAlive(pid)) {
         throw schemaInferenceFailed("Could not start schema inference process for <csvPath>");
     }
@@ -254,7 +254,7 @@ TypeStore checkModel(stepModel(ModelExpr expr), TypeStore store) {
     return tStore(store.target, store.schema, task);
 }
 
-void checkHyperparams(modelTrain(Algorithm algo, StrLit _, set[Param] hyperParams)) {
+void checkHyperparams(modelTrain(Algorithm algo, StrLit _, list[Param] hyperParams)) {
     ParamSignature sig = signatureOf(algo);
     for (hp(str name, Lit val) <- hyperParams) {
         if (name notin sig) {

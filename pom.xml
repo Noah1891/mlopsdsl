@@ -35,10 +35,39 @@
         <groupId>org.rascalmpl</groupId>
         <artifactId>rascal-lsp</artifactId>
         <version>2.22.5</version>
+        <exclusions>
+          <!-- diese Klassen werden bereits vom laufenden rascal-lsp Server geladen;
+               ohne diesen Ausschluss würden sie doppelt und potenziell in
+               abweichender Version ins JAR gelangen -->
+          <exclusion>
+            <groupId>org.rascalmpl</groupId>
+            <artifactId>typepal</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.rascalmpl</groupId>
+            <artifactId>rascal-core</artifactId>
+          </exclusion>
+        </exclusions>
     </dependency> 
   </dependencies>
 
   <build>
+    <resources>
+      <resource>
+        <!-- macht das JAR als Rascal-Projekt erkennbar (Require-Libraries etc.) -->
+        <directory>.</directory>
+        <filtering>false</filtering>
+        <includes>
+          <include>META-INF/RASCAL.MF</include>
+        </includes>
+      </resource>
+      <resource>
+        <!-- die .rsc Quellen müssen mit ins JAR, damit findResources() und der
+             Evaluator sie im compiled/deploy-Modus wiederfinden -->
+        <directory>src/main/rascal</directory>
+        <filtering>false</filtering>
+      </resource>
+    </resources>
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -64,4 +93,3 @@
     </plugins>
   </build>
 </project>
-    

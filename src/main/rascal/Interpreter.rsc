@@ -200,7 +200,7 @@ str evalScaleMethod(scaleMinMax()) = "minmax";
 
 str evalScaleMethod(scaleStd()) = "std";
 
-MLOpsStore evalModel(Model m:stepModel(modelTrain(Algorithm algo, StrLit path, set[Param] hyperParams)), MLOpsStore s, PID pid) {
+MLOpsStore evalModel(Model m:stepModel(modelTrain(Algorithm algo, StrLit path, list[Param] hyperParams)), MLOpsStore s, PID pid) {
     str algo_as_string = evalAlgo(algo);
     map[str, str] params = (); 
     for (Param hyperParam <- hyperParams) {

@@ -1,6 +1,7 @@
 module PythonBridge
 
 import util::ShellExec;
+import util::SystemAPI;
 import lang::json::IO;
 import IO;
 import String;
@@ -28,8 +29,30 @@ public loc getPath(str file) {
     return getSingleFrom(found);
 }
 
+@synopsis{True when this evaluator is running on Windows.}
+private bool isWindowsOS() = /^(?i)windows/ := getSystemProperty("os.name");
+
+@synopsis{Relative resource path (from a source-/classpath root) of the python executable
+inside the virtual environment `.mlopsenv`, made independent of the OS the extension runs on.}
+private str pythonExecutableRelPath()
+    = isWindowsOS() ? ".mlopsenv/Scripts/python.exe" : ".mlopsenv/bin/python3";
+
+@synopsis{Locates the python executable of the `.mlopsenv` virtual environment.
+Works both in interpreter/dev mode (where `.mlopsenv` lives next to the scripts under
+`src/main/python`) and in the packaged extension (where `.mlopsenv` is created on demand
+by the extension and its parent folder is added to the runtime path config), because both
+modes resolve `findResources` relative to their configured source/classpath roots.}
+public loc getPythonExecutable() {
+    set[loc] found = findResources(pythonExecutableRelPath());
+    if (size(found) != 1) {
+        throw "Python environment (.mlopsenv) not found or ambiguous (<size(found)> matches). " +
+              "Make sure the Python environment for this extension has been set up.";
+    }
+    return getSingleFrom(found);
+}
+
 PID startPythonWorker() {
-    PID pid = createProcess(|project://mlopsdsl/src/main/python/.mlopsenv/bin/python3|, args=[getPath("pipeline_worker.py")]);
+    PID pid = createProcess(getPythonExecutable(), args=[getPath("pipeline_worker.py")]);
     if (!isAlive(pid)) throw "Error: Python worker could not be started.";
     return pid;
 }

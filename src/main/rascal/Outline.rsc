@@ -75,10 +75,15 @@ DocumentSymbol transformToOutline(pt:(PrepTransform) `scale ( <StrLit feature> ,
 
 DocumentSymbol modelToOutline((Model) `model <ModelExpr expr>`) = modelExprToOutline(expr);
 
-DocumentSymbol modelExprToOutline(me:(ModelExpr) `<Algorithm algo> ( dir = <StrLit path> , <{Param ","}* hyperParams> )`) {
+DocumentSymbol modelExprToOutline(me:(ModelExpr) `<Algorithm algo> ( dir = <StrLit path> , <{Param ","}+ hyperParams> )`) {
     DocumentSymbol outputDirSymbol = symbol("directory = <path.content>", DocumentSymbolKind::\string(), path.src);
     list[DocumentSymbol] paramSymbols = [symbol("<p.name> = <p.val>", DocumentSymbolKind::\property(), p.src) | Param p <- hyperParams];
     return symbol("model: <algo>", DocumentSymbolKind::\class(), me.src, children=[outputDirSymbol, *paramSymbols]);
+}
+
+DocumentSymbol modelExprToOutline(me:(ModelExpr) `<Algorithm algo> ( dir = <StrLit path> )`) {
+    DocumentSymbol outputDirSymbol = symbol("directory = <path.content>", DocumentSymbolKind::\string(), path.src);
+    return symbol("model: <algo>", DocumentSymbolKind::\class(), me.src, children=[outputDirSymbol]);
 }
 
 DocumentSymbol evalToOutline(e:(Eval) `evaluation ( <{Metric ","}+ metrics> )`) {

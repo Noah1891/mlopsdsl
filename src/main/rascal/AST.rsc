@@ -34,7 +34,7 @@ data EncodingMethod(loc src=|unknown:///|) = encOneHot()
 data ScaleMethod(loc src=|unknown:///|) = scaleMinMax()
                    | scaleStd();
 
-data ModelExpr(loc src=|unknown:///|) = modelTrain(Algorithm algo, StrLit dir, set[Param] hyperParams);
+data ModelExpr(loc src=|unknown:///|) = modelTrain(Algorithm algo, StrLit dir, list[Param] hyperParams);
 
 data Algorithm(loc src=|unknown:///|) = algoLR(str name="Linear Regression")
                | algoRF(str name="Random Forest")

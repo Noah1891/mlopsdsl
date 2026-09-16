@@ -323,7 +323,7 @@ PID runInferenceScript(loc l, AST::StrLit path) {
     loc baseDir = l.parent;
     loc csvPath = baseDir + p;
     loc inferenceScript = getPath("schema_infer.py");
-    return createProcess(|project://mlopsdsl/src/main/python/.mlopsenv/bin/python3|, args=[inferenceScript, csvPath.top]);
+    return createProcess(PythonBridge::getPythonExecutable(), args=[inferenceScript, csvPath.top]);
 }
 
 SchemaJson retrieveResponse(PID pid) {
