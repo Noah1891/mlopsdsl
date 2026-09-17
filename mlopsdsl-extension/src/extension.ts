@@ -115,7 +115,7 @@ async function setupPythonEnvironment(context: vscode.ExtensionContext, showSucc
 			fs.mkdirSync(venvRootFsPath(context), { recursive: true });
 
 			progress.report({ message: 'Create virutal environment…' });
-			await run(pythonCmd, ['-m', 'venv', '--clear', venv]);
+			await run(pythonCmd, ['-m', 'venv', venv]);
 
 			const pip = pythonExecutablePath(venv);
 			progress.report({ message: 'Update pip…' });

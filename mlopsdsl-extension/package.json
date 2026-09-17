@@ -4,6 +4,10 @@
   "description": "Language support for the MLOps pipeline DSL (powered by Rascal)",
   "version": "0.1.0",
   "publisher": "softlang-ag-uni-koblenz",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Noah1891/mlopsdsl"
+  },
   "engines": {
     "vscode": "^1.75.0"
   },
