@@ -63,11 +63,6 @@ npm install
 npm run prepackage   # rebuilds mlopsdsl and copies the JAR + Python scripts here
 npm run compile
 npx vsce package     # produces the .vsix
-```
-
-### Development / testing
-
-Open the `mlopsdsl-extension` folder in VS Code and press **F5** (`Run MLOps DSL Extension`) — this launches a new VS Code window with the extension installed.
 
 ### Runtime behavior
 
