@@ -432,10 +432,18 @@ TypeStore checkAndApplyTransform(prepScale(StrLit feature, ScaleMethod _), TypeS
     if (size(msgs) != 0) {
         return store;
     }
-    if (schema[feat].ctype notin {tInteger(), tFloat()}) {
-        store.messages += {<feature.src, error("scale(...) requires a numeric column, but \'<feat>\' is <schema[feat].ctype>.", feature.src)>};
+    switch(schema[feat]) {
+        case colInfo(ctype): {
+            if (ctype notin {tInteger(), tFloat()}) {
+                store.messages += {<feature.src, error("scale(...) requires a numeric column, but \'<feat>\' is <schema[feat].ctype>.", feature.src)>};
+            }
+            schema = schema + (feat: colInfo(tFloat));
+        }
+        case colInfoEnc(tInteger(), method, oldType): {
+            schema = schema + (feat: colInfoEnc(tFloat(), method, oldType));
+        }
     }
-    return store;
+    return tStore(store.target, schema, store.task, store.messages);
 }
 
 TypeStore checkAndApplyTransform(prepEncode(StrLit feature, EncodingMethod method), TypeStore store) {

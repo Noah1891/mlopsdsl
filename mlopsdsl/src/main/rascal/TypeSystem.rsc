@@ -204,8 +204,16 @@ Schema checkAndApplyTransform(prepFill(StrLit feature, FillStrategy strategy), S
 Schema checkAndApplyTransform(prepScale(StrLit feature, ScaleMethod _), Schema schema) {
     str feat = feature.content;
     requireColumn(schema, feat);
-    if (schema[feat].ctype notin {tInteger(), tFloat()}) {
-        throw incompatibleTransform("scale(...) requires a numeric column, but \'<feat>\' is <schema[feat].ctype>.");
+    switch(schema[feat]) {
+        case colInfo(ctype): {
+            if (ctype notin {tInteger(), tFloat()}) {
+                throw incompatibleTransform("scale(...) requires a numeric column, but \'<feat>\' is <schema[feat].ctype>.");
+            }
+            schema = schema + (feat: colInfo(tFloat));
+        }
+        case colInfoEnc(tInteger(), method, oldType): {
+            schema = schema + (feat: colInfoEnc(tFloat(), method, oldType));
+        }
     }
     return schema;
 }
