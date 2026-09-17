@@ -4,12 +4,11 @@ import * as fs from 'fs';
 import * as cp from 'child_process';
 import { ParameterizedLanguageServer, VSCodeUriResolverServer, LanguageParameter } from '@usethesource/rascal-vscode-dsl-lsp-server';
 
-/** Name des virtuellen Environments - identisch zum Namen, der im
- *  Entwicklungsmodus unter `src/main/python/.mlopsenv` liegt. Dadurch bleibt
- *  der von Rascal aus per `findResources` gesuchte relative Pfad
- *  (".mlopsenv/bin/python3" bzw. ".mlopsenv/Scripts/python.exe") in beiden
- *  Modi identisch - nur die Wurzel, die zur pathConfig hinzugefügt wird,
- *  unterscheidet sich. */
+/** Name of the virtual environment - identical to the name used in
+ *  development mode under `src/main/python/.mlopsenv`. This keeps the
+ *  relative path searched by Rascal via `findResources`
+ *  (".mlopsenv/bin/python3" or ".mlopsenv/Scripts/python.exe") identical in
+ *  both modes - only the root added to pathConfig differs. */
 const VENV_FOLDER_NAME = '.mlopsenv';
 
 export async function activate(context: vscode.ExtensionContext) {
@@ -18,17 +17,17 @@ export async function activate(context: vscode.ExtensionContext) {
 			setupPythonEnvironment(context, true))
 	);
 
-	// Prüfen/Anbieten läuft im Hintergrund, blockiert die Aktivierung nicht.
+	// Checking and offering setup runs in the background and does not block activation.
 	void ensurePythonEnvironment(context);
 
-	// jar, das das "Plugin" Modul (die eigentliche Sprachdefinition) enthält
+	// JAR containing the "Plugin" module (the actual language definition)
 	const mlopsLSPJar = `|jar+file://${context.extensionUri.path}/assets/jars/mlopsdsl-lsp.jar!|`;
-	// die Python-Skripte liegen NICHT im JAR (createProcess kann keine
-	// jar+file:// URIs an einen externen Prozess übergeben), sondern als
-	// echte Dateien im Extension-Verzeichnis - siehe assets/python
+	// The Python scripts are NOT in the JAR (createProcess cannot pass
+	// jar+file:// URIs to an external process), but are stored as actual
+	// files in the extension directory - see assets/python
 	const pythonScriptsLoc = `|file://${context.extensionUri.path}/assets/python|`;
-	// persistenter, System- und Projekt-unabhängiger Ort, unter dem die
-	// Extension das virtuelle Environment nach der Installation anlegt
+	// Persistent location independent of the system and project, where the
+	// extension creates the virtual environment after installation
 	const venvRootLoc = `|file://${venvRootUriPath(context)}|`;
 
 	const language = <LanguageParameter>{
@@ -39,18 +38,18 @@ export async function activate(context: vscode.ExtensionContext) {
 		mainFunction: "pipelineLanguageServices"
 	};
 
-	// rascal vscode braucht eine Instanz dieser Klasse; bei mehreren Sprachen
-	// kann sie gemeinsam genutzt werden
+	// Rascal VS Code needs an instance of this class; it can be shared
+	// when there are multiple languages
 	const vfs = new VSCodeUriResolverServer(false);
-	// startet den LSP-Server und verbindet ihn mit Rascal
+	// Starts the LSP server and connects it to Rascal
 	const lsp = new ParameterizedLanguageServer(context,
 		vfs,
 		calcJarPath(context),
 		true,
-		"mlops",     // vscode language ID
-		"MLOps DSL", // vscode language Titel (unten rechts sichtbar)
+		"mlops",     // VS Code language ID
+		"MLOps DSL", // VS Code language title (visible in the bottom right)
 		language);
-	// über subscriptions wird beim Deaktivieren alles korrekt aufgeräumt
+	// Subscriptions ensure that everything is cleaned up correctly on deactivation
 	context.subscriptions.push(lsp);
 }
 
@@ -58,16 +57,16 @@ function calcJarPath(context: vscode.ExtensionContext) {
 	return context.asAbsolutePath(path.join('.', 'dist', 'rascal-lsp'));
 }
 
-/** Native Dateisystem-Variante des persistenten Speicherorts (für fs/child_process). */
+/** Native filesystem variant of the persistent location (for fs/child_process). */
 function venvRootFsPath(context: vscode.ExtensionContext): string {
-	// globalStorageUri ist pro Extension stabil - unabhängig vom Projekt/
-	// Workspace und vom Rechner/Benutzernamen der Person, die die Extension
-	// installiert. Genau deshalb ist es der richtige, portable Ort für ein
-	// einmalig angelegtes virtuelles Environment.
+	// globalStorageUri is stable for each extension - independent of the project/
+	// workspace and the computer/username of the person who installs the
+	// extension. That is why it is the right portable location for a virtual
+	// environment created once.
 	return context.globalStorageUri.fsPath;
 }
 
-/** URI-Pfad-Variante desselben Ortes (für die Rascal `pathConfig`-Location). */
+/** URI path variant of the same location (for the Rascal `pathConfig` location). */
 function venvRootUriPath(context: vscode.ExtensionContext): string {
 	return context.globalStorageUri.path;
 }
@@ -85,21 +84,21 @@ function pythonExecutablePath(venv: string): string {
 async function ensurePythonEnvironment(context: vscode.ExtensionContext) {
 	const venv = venvDir(context);
 	if (fs.existsSync(pythonExecutablePath(venv))) {
-		return; // bereits eingerichtet
+		return; // Already set up
 	}
 
 	const choice = await vscode.window.showInformationMessage(
-		'Die MLOps DSL benötigt eine lokale Python-Umgebung (für Schema-Inferenz, Typprüfung und Pipeline-Ausführung). Jetzt einrichten?',
-		'Jetzt einrichten', 'Später'
+		'The MLOpsDSL needs a local Python environment for all its features (schema inference, type checking, pipeline execution). Setup now?',
+		'Setup now', 'Later'
 	);
-	if (choice === 'Jetzt einrichten') {
+	if (choice === 'Setup now') {
 		await setupPythonEnvironment(context, false);
 	}
 }
 
-/** Signalisiert, dass der konfigurierte Python-Befehl gar nicht existiert
- *  (z.B. weil auf dem System kein Python installiert ist), im Unterschied
- *  zu einem Fehler *während* der Ausführung von venv/pip. */
+/** Indicates that the configured Python command does not exist at all
+ *  (e.g. because Python is not installed on the system), as opposed
+ *  to an error *during* the execution of venv/pip. */
 class PythonNotFoundError extends Error {}
 
 async function setupPythonEnvironment(context: vscode.ExtensionContext, showSuccessMessage: boolean) {
@@ -109,32 +108,32 @@ async function setupPythonEnvironment(context: vscode.ExtensionContext, showSucc
 
 	await vscode.window.withProgress({
 		location: vscode.ProgressLocation.Notification,
-		title: 'MLOps DSL: Python-Umgebung wird eingerichtet…',
+		title: 'MLOps DSL: Setting up Python environment…',
 		cancellable: false
 	}, async (progress) => {
 		try {
 			fs.mkdirSync(venvRootFsPath(context), { recursive: true });
 
-			progress.report({ message: 'Erzeuge virtuelles Environment…' });
+			progress.report({ message: 'Create virutal environment…' });
 			await run(pythonCmd, ['-m', 'venv', venv]);
 
 			const pip = pythonExecutablePath(venv);
-			progress.report({ message: 'Aktualisiere pip…' });
+			progress.report({ message: 'Update pip…' });
 			await run(pip, ['-m', 'pip', 'install', '--upgrade', 'pip']);
 
 			if (fs.existsSync(requirements)) {
-				progress.report({ message: 'Installiere Abhängigkeiten…' });
+				progress.report({ message: 'Install dependencies…' });
 				await run(pip, ['-m', 'pip', 'install', '-r', requirements]);
 			}
 
 			if (showSuccessMessage) {
-				void vscode.window.showInformationMessage('MLOps DSL: Python-Umgebung erfolgreich eingerichtet.');
+				void vscode.window.showInformationMessage('MLOps DSL: Python environment setup successfull.');
 			}
 		} catch (err) {
 			if (err instanceof PythonNotFoundError) {
 				await handlePythonNotFound(context, pythonCmd, showSuccessMessage);
 			} else {
-				void vscode.window.showErrorMessage(`MLOps DSL: Einrichtung der Python-Umgebung fehlgeschlagen: ${err}`);
+				void vscode.window.showErrorMessage(`MLOps DSL: Python environment setup failed: ${err}`);
 			}
 		}
 	});
@@ -142,22 +141,22 @@ async function setupPythonEnvironment(context: vscode.ExtensionContext, showSucc
 
 async function handlePythonNotFound(context: vscode.ExtensionContext, pythonCmd: string, showSuccessMessage: boolean) {
 	const choice = await vscode.window.showErrorMessage(
-		`MLOps DSL: Es wurde kein "${pythonCmd}" gefunden. Bitte installiere Python 3, danach kannst du es hier erneut versuchen.`,
-		'Python-Downloadseite öffnen', 'Erneut versuchen'
+		`MLOps DSL: No "${pythonCmd}" was found. Please install Python 3 and try again.`,
+		'Open Python download page', 'Try again'
 	);
 
-	if (choice === 'Python-Downloadseite öffnen') {
+	if (choice === 'Open Python download page') {
 		void vscode.env.openExternal(vscode.Uri.parse('https://www.python.org/downloads/'));
-		// direkt einen Retry anbieten, statt den Nutzer auf den Befehl in der
-		// Befehlspalette zu verweisen - er muss den Namen dafür nicht kennen
+		// Offer a retry directly instead of referring the user to the command
+		// palette - they do not need to know the command name
 		const retry = await vscode.window.showInformationMessage(
-			'MLOps DSL: Sobald die Python-Installation abgeschlossen ist, kannst du die Einrichtung hier erneut versuchen.',
-			'Erneut versuchen'
+			'MLOps DSL: When the Python installation is completed, you can try again here.',
+			'Try again'
 		);
-		if (retry === 'Erneut versuchen') {
+		if (retry === 'Try again') {
 			await setupPythonEnvironment(context, showSuccessMessage);
 		}
-	} else if (choice === 'Erneut versuchen') {
+	} else if (choice === 'Try again') {
 		await setupPythonEnvironment(context, showSuccessMessage);
 	}
 }
@@ -169,7 +168,7 @@ function run(cmd: string, args: string[]): Promise<void> {
 		proc.stderr?.on('data', (d) => { stderr += d.toString(); });
 		proc.on('error', (err: NodeJS.ErrnoException) => {
 			if (err.code === 'ENOENT') {
-				reject(new PythonNotFoundError(`Befehl "${cmd}" wurde nicht gefunden.`));
+				reject(new PythonNotFoundError(`Command "${cmd}" was not found.`));
 			} else {
 				reject(err);
 			}
@@ -178,7 +177,7 @@ function run(cmd: string, args: string[]): Promise<void> {
 			if (code === 0) {
 				resolve();
 			} else {
-				reject(new Error(`${cmd} ${args.join(' ')} beendete sich mit Code ${code}: ${stderr}`));
+				reject(new Error(`${cmd} ${args.join(' ')} finished with exit code ${code}: ${stderr}`));
 			}
 		});
 	});

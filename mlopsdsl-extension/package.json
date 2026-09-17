@@ -1,7 +1,7 @@
 {
   "name": "mlopsdsl",
   "displayName": "MLOps DSL",
-  "description": "Sprachunterstützung für die MLOps Pipeline DSL (powered by Rascal)",
+  "description": "Language support for the MLOps pipeline DSL (powered by Rascal)",
   "version": "0.1.0",
   "publisher": "softlang-ag-uni-koblenz",
   "engines": {
@@ -30,7 +30,7 @@
     "commands": [
       {
         "command": "mlopsdsl.setupPythonEnvironment",
-        "title": "MLOps DSL: Python-Umgebung (neu) einrichten"
+        "title": "MLOps DSL: (Re-)setup Python environment"
       }
     ]
   },

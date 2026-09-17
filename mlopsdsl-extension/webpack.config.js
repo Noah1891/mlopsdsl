@@ -45,8 +45,8 @@ const extensionConfig = {
     new CopyPlugin({
       patterns: [
         {
-          // Basis-JARs des Rascal LSP Multiplexers, an einen leicht
-          // vorhersehbaren Ort kopiert (siehe extension.ts: calcJarPath)
+          // Base JARs of the Rascal LSP multiplexer, copied to an easily
+          // predictable location (see extension.ts: calcJarPath)
           from: path.resolve(
             __dirname,
             "node_modules/@usethesource/rascal-vscode-dsl-lsp-server/assets/jars/"

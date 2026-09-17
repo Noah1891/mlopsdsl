@@ -36,9 +36,9 @@
         <artifactId>rascal-lsp</artifactId>
         <version>2.22.5</version>
         <exclusions>
-          <!-- diese Klassen werden bereits vom laufenden rascal-lsp Server geladen;
-               ohne diesen Ausschluss würden sie doppelt und potenziell in
-               abweichender Version ins JAR gelangen -->
+          <!-- These classes are already loaded by the running rascal-lsp server;
+               without this exclusion, they would be included in the JAR twice
+               and potentially in a different version. -->
           <exclusion>
             <groupId>org.rascalmpl</groupId>
             <artifactId>typepal</artifactId>
@@ -54,7 +54,7 @@
   <build>
     <resources>
       <resource>
-        <!-- macht das JAR als Rascal-Projekt erkennbar (Require-Libraries etc.) -->
+        <!-- Makes the JAR recognizable as a Rascal project (Require-Libraries, etc.) -->
         <directory>.</directory>
         <filtering>false</filtering>
         <includes>
@@ -62,8 +62,8 @@
         </includes>
       </resource>
       <resource>
-        <!-- die .rsc Quellen müssen mit ins JAR, damit findResources() und der
-             Evaluator sie im compiled/deploy-Modus wiederfinden -->
+        <!-- The .rsc sources must be included in the JAR so that findResources()
+             and the evaluator can find them again in compiled/deploy mode. -->
         <directory>src/main/rascal</directory>
         <filtering>false</filtering>
       </resource>
