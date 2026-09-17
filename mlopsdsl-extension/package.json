@@ -1,0 +1,61 @@
+{
+  "name": "mlopsdsl",
+  "displayName": "MLOps DSL",
+  "description": "Sprachunterstützung für die MLOps Pipeline DSL (powered by Rascal)",
+  "version": "0.1.0",
+  "publisher": "softlang-ag-uni-koblenz",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:mlops"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "mlops",
+        "aliases": [
+          "MLOps DSL"
+        ],
+        "extensions": [
+          ".mlops"
+        ],
+        "configuration": "./assets/mlops-language-configuration.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "mlopsdsl.setupPythonEnvironment",
+        "title": "MLOps DSL: Python-Umgebung (neu) einrichten"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "prepackage": "cd ../mlopsdsl && mvn -q clean package && cp target/mlopsdsl-*.jar ../mlopsdsl-extension/assets/jars/mlopsdsl-lsp.jar && rm -rf ../mlopsdsl-extension/assets/python && mkdir -p ../mlopsdsl-extension/assets/python && cp src/main/python/*.py src/main/python/requirements.txt ../mlopsdsl-extension/assets/python/",
+    "compile": "npx webpack",
+    "watch": "npx webpack --watch",
+    "package": "npx webpack --mode production --devtool hidden-source-map",
+    "lint": "npx eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.75.0",
+    "@types/node": "18.x",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "copy-webpack-plugin": "^11.0.0",
+    "eslint": "^8.26.0",
+    "typescript": "^5.3.0",
+    "ts-loader": "^9.4.1",
+    "@vscode/vsce": "^2.24.0",
+    "webpack": "^5.74.0",
+    "webpack-cli": "^4.10.0"
+  },
+  "dependencies": {
+    "@usethesource/rascal-vscode-dsl-lsp-server": "0.12.0"
+  }
+}
