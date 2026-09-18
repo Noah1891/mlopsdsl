@@ -437,7 +437,7 @@ TypeStore checkAndApplyTransform(prepScale(StrLit feature, ScaleMethod _), TypeS
             if (ctype notin {tInteger(), tFloat()}) {
                 store.messages += {<feature.src, error("scale(...) requires a numeric column, but \'<feat>\' is <schema[feat].ctype>.", feature.src)>};
             }
-            schema = schema + (feat: colInfo(tFloat));
+            schema = schema + (feat: colInfo(tFloat()));
         }
         case colInfoEnc(tInteger(), method, oldType): {
             schema = schema + (feat: colInfoEnc(tFloat(), method, oldType));

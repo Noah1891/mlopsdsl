@@ -9,6 +9,6 @@ pipeline minimal_ex {
     )
 
     model LogReg (
-        dir = "../../../models",
+        dir = "../../../models"
     )
 }

@@ -209,7 +209,7 @@ Schema checkAndApplyTransform(prepScale(StrLit feature, ScaleMethod _), Schema s
             if (ctype notin {tInteger(), tFloat()}) {
                 throw incompatibleTransform("scale(...) requires a numeric column, but \'<feat>\' is <schema[feat].ctype>.");
             }
-            schema = schema + (feat: colInfo(tFloat));
+            schema = schema + (feat: colInfo(tFloat()));
         }
         case colInfoEnc(tInteger(), method, oldType): {
             schema = schema + (feat: colInfoEnc(tFloat(), method, oldType));
