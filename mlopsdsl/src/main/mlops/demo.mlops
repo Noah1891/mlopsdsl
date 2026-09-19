@@ -1,7 +1,8 @@
 pipeline demo {
     load (
         path = "../../../data/Titanic-Dataset.csv",
-        target = "Survived"
+        target = "Survived",
+        databaseURL = "postgresql://mlops:mlops@localhost:5432/mlops"
     )
 
     split (
@@ -27,8 +28,8 @@ pipeline demo {
     )
     
     evaluation (
-        accuracy,
-        precision
+        accuracy >= 0.5,
+        precision >= 0.5
     )
 
     deployment (

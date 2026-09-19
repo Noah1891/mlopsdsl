@@ -121,11 +121,17 @@ str genFastAPIApp(str trainedModelFileName, int ms) =
 
 str genFastAPIAppMonitored(str trainedModelFileName) =
     "import joblib
+    'import logging
     'import pandas as pd
     'from collections import deque
     'from scipy.stats import ks_2samp, chisquare
-    'from fastapi import FastAPI
+    'from fastapi import FastAPI, BackgroundTasks
     'from pydantic import create_model
+    'from sqlalchemy import create_engine, MetaData, Table, insert
+    'from sqlalchemy.engine import make_url
+    'import os
+    '
+    'logger = logging.getLogger(\"uvicorn.error\")
     '
     'artifact = joblib.load(\"<trainedModelFileName>\")
     'model = artifact[\"model\"]
@@ -137,6 +143,24 @@ str genFastAPIAppMonitored(str trainedModelFileName) =
     'methods = artifact[\"methods\"]
     'windows = artifact[\"windows\"]
     'thresholds = artifact[\"thresholds\"]
+    '
+    'TABLE_NAME = \"requests\"
+    '
+    'url = make_url(artifact[\"db_url\"])
+    'override = os.environ.get(\"DB_HOST_OVERRIDE\")
+    'if override and url.host in (\"localhost\", \"127.0.0.1\"):
+    '   url = url.set(host=override)
+    '
+    'engine = create_engine(url, pool_pre_ping=True)
+    'requests_table = Table(TABLE_NAME, MetaData(), autoload_with=engine)
+    '
+    'def store_request(payload: dict) -\> None:
+    '   try:
+    '       row = {f: payload[f] for f in selected_features}
+    '       with engine.begin() as conn:
+    '           conn.execute(insert(requests_table), row)
+    '   except Exception:
+    '       logger.exception(\"Saving request input in database failed\")
     '
     'InputSchema = create_model(\"InputSchema\", **{f: (float | str, ...) for f in selected_features})
     '
@@ -171,7 +195,7 @@ str genFastAPIAppMonitored(str trainedModelFileName) =
     '
     '
     '@app.post(\"/predict\")
-    'def predict(item: InputSchema):
+    'def predict(item: InputSchema, background_tasks: BackgroundTasks):
     '   raw = item.dict()
     '
     '   for feature, window, method, threshold in zip(baseline_df.columns, windows, methods, thresholds):
@@ -185,6 +209,7 @@ str genFastAPIAppMonitored(str trainedModelFileName) =
     '   df = pd.DataFrame([raw])
     '   df = apply_transforms(df)
     '   pred = model.predict(df)[0]
+    '   background_tasks.add_task(store_request, raw)
     '   result = {\"prediction\": pred.item() if hasattr(pred, \"item\") else pred}
     '   if warnings:
     '       result[\"warnings\"] = warnings
@@ -193,12 +218,18 @@ str genFastAPIAppMonitored(str trainedModelFileName) =
 
 str genFastAPIAppMonitored(str trainedModelFileName, int ms) =
     "import time
+    'import logging
     'import joblib
     'import pandas as pd
     'from collections import deque
     'from scipy.stats import ks_2samp, chisquare
-    'from fastapi import FastAPI
+    'from fastapi import FastAPI, BackgroundTasks
     'from pydantic import create_model
+    'from sqlalchemy import create_engine, MetaData, Table, insert
+    'from sqlalchemy.engine import make_url
+    'import os
+    '
+    'logger = logging.getLogger(\"uvicorn.error\")
     '
     'artifact = joblib.load(\"<trainedModelFileName>\")
     'model = artifact[\"model\"]
@@ -210,6 +241,24 @@ str genFastAPIAppMonitored(str trainedModelFileName, int ms) =
     'methods = artifact[\"methods\"]
     'windows = artifact[\"windows\"]
     'thresholds = artifact[\"thresholds\"]
+    '
+    'TABLE_NAME = \"requests\"
+    '
+    'url = make_url(artifact[\"db_url\"])
+    'override = os.environ.get(\"DB_HOST_OVERRIDE\")
+    'if override and url.host in (\"localhost\", \"127.0.0.1\"):
+    '   url = url.set(host=override)
+    '
+    'engine = create_engine(url, pool_pre_ping=True)
+    'requests_table = Table(TABLE_NAME, MetaData(), autoload_with=engine)
+    '
+    'def store_request(payload: dict) -\> None:
+    '   try:
+    '       row = {f: payload[f] for f in selected_features}
+    '       with engine.begin() as conn:
+    '           conn.execute(insert(requests_table), row)
+    '   except Exception:
+    '       logger.exception(\"Saving request input in database failed\")
     '
     'InputSchema = create_model(\"InputSchema\", **{f: (float | str, ...) for f in selected_features})
     '
@@ -244,7 +293,7 @@ str genFastAPIAppMonitored(str trainedModelFileName, int ms) =
     '
     '
     '@app.post(\"/predict\")
-    'def predict(item: InputSchema):
+    'def predict(item: InputSchema, background_tasks: BackgroundTasks):
     '   start = time.perf_counter()
     '   raw = item.dict()
     '   warnings = []
@@ -263,6 +312,7 @@ str genFastAPIAppMonitored(str trainedModelFileName, int ms) =
     '   elapsed_ms = (time.perf_counter() - start) * 1000
     '   if elapsed_ms \> <ms>:
     '       warnings.append(f\"Latency {elapsed_ms:.1f}ms exceeded {<ms>}ms\")
+    '   background_tasks.add_task(store_request, raw)
     '   result = {\"prediction\": pred.item() if hasattr(pred, \"item\") else pred}
     '   if warnings:
     '       result[\"warnings\"] = warnings
@@ -294,6 +344,8 @@ str genRequirementsTXTMonitored() =
     'scikit-learn
     'joblib
     'scipy
+    'sqlalchemy
+    'psycopg2-binary
     ";
 
 str genRequirementsTXT() =
@@ -303,3 +355,16 @@ str genRequirementsTXT() =
     'scikit-learn
     'joblib
     ";
+
+str genDockerCompose(int port, bool withDB) =
+    "services:
+    '  api:
+    '    build: .
+    '    ports:
+    '      - \"<port>:<port>\"
+    '    restart: unless-stopped
+    '<if (withDB) {>    extra_hosts:
+    '      - \"host.docker.internal:host-gateway\"
+    '    environment:
+    '      DB_HOST_OVERRIDE: host.docker.internal
+    '<}>";

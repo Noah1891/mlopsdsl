@@ -11,10 +11,17 @@ from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_sc
 import joblib
 from pathlib import Path
 
+from sqlalchemy import create_engine, inspect, text
+
+TABLE_NAME = "requests"
+
 context = {
     "df": None,
     "y": None,
     "target": None,
+    "db_url": None,
+    "re_run": False,
+    "engine": None,
     "X_train": None,
     "X_test": None,
     "y_train": None,
@@ -55,12 +62,15 @@ METRICS = {
     "rmse": root_mean_squared_error
 }
 
-def send_response(status, message, file_path="", code=0):
+def send_response(status, message, file_path="", eval_results=None, code=0):
     """Helper function, that produces JSON in the Rascal Response-ADT format"""
+    if eval_results is None:
+        eval_results = {}
     res = {
         "status": status,
         "message": message,
         "modelFilePath": file_path,
+        "evalResults": eval_results,
         "code": code
     }
     print(json.dumps(res))
@@ -79,22 +89,62 @@ def main():
             if cmd == "LOAD":
                 path = request["path"]
                 context["target"] = request["target"]
-                
-                if not os.path.exists(path):
-                    send_response("ERROR", f"File not found: {path}", code=1)
-                    continue
-                    
-                context["df"] = pd.read_csv(path)
+                context["db_url"] = request["dbURL"] or None
+                context["re_run"] = request["reRun"]
 
-                if context["target"] not in context["df"].columns:
-                    send_response("ERROR", f"Specified target {context['target']} is not a column in loaded CSV.", code=2)
-                    continue
+                if context["db_url"]:
+                    try:
+                        context["engine"] = create_engine(context["db_url"], pool_pre_ping=True)
+                        with context["engine"].connect():
+                            pass
+                    except Exception as e:
+                        send_response("ERROR", f"Database connection failed: {e}", code=4)
+                        continue
 
-                context["y"] = context["df"][context["target"]]
-                context["df"] = context["df"].drop(columns=[context["target"]])
+                engine = context["engine"]
+
+                if context["re_run"]:
+                    if not inspect(engine).has_table(TABLE_NAME):
+                        send_response("ERROR", f"re_run=true, but table '{TABLE_NAME}' does not exist.", code=5)
+                        continue
+
+                    full_df = pd.read_sql_table(TABLE_NAME, engine)
+                    full_df.columns = [str(c) for c in full_df.columns]
+
+                    if context["target"] not in full_df.columns:
+                        send_response("ERROR", f"Specified target {context["target"]} is not a column in table '{TABLE_NAME}'.",
+                                      code=2)
+                        continue
+
+                    n_total = len(full_df)
+                    full_df = full_df.dropna(subset=[context["target"]]).reset_index(drop=True)
+                    t = full_df[context["target"]]
+                    if pd.api.types.is_float_dtype(t) and (t % 1 == 0).all():
+                        full_df[context["target"]] = t.astype("int64")
+                    info = f"Loaded from database ({n_total} rows, {n_total - len(full_df)} without target dropped)."
+
+                else:
+                    if not os.path.exists(path):
+                        send_response("ERROR", f"File not found: {path}", code=1)
+                        continue
+
+                    full_df = pd.read_csv(path)
+
+                    if context["target"] not in full_df.columns:
+                        send_response("ERROR", f"Specified target {context['target']} is not a column in loaded CSV.", code=2)
+                        continue
+
+                    if engine is not None:
+                        full_df.to_sql(TABLE_NAME, engine, if_exists="replace", index=False)
+                        info = f"CSV loaded and written to table '{TABLE_NAME}'."
+                    else:
+                        info = "CSV loaded (no database configured)"
+
+                context["y"] = full_df[context["target"]]
+                context["df"] = full_df.drop(columns=[context["target"]])
                 context["raw_features"] = list(context["df"].columns)
                 
-                send_response("SUCCESS", f"CSV loaded successfully. Form: {context['df'].shape}")
+                send_response("SUCCESS", f"{info}. Form: {context['df'].shape}")
             
             elif cmd == "SPLIT":
                 ratio = float(request["ratio"]);
@@ -115,6 +165,11 @@ def main():
                 send_response("SUCCESS", f"Data splitted (Train: {len(X_train)}, Test: {len(X_test)})")
             
             elif cmd == "SELECT":
+                if context["re_run"]:
+                    context["selected_features"] = list(context["raw_features"])
+                    send_response("SUCCESS", f"re_run=true: SELECT skipped, using columns from database: {context['selected_features']}")
+                    continue
+
                 context["selected_features"] = request["features"]
 
                 if context["X_train"] is not None:
@@ -138,8 +193,27 @@ def main():
             
                     context["df"] = context["df"][context["selected_features"]]
 
+                to_drop = []
+                engine = context["engine"]
+                if engine is not None:
+                    db_cols = [c["name"] for c in inspect(engine).get_columns(TABLE_NAME)]
+                    to_drop = [c for c in db_cols if c not in context["selected_features"] and c != context["target"]]
+                    quote = engine.dialect.identifier_preparer.quote
+                    try:
+                        with engine.begin() as conn:
+                            for col in to_drop:
+                                conn.execute(text(f"ALTER TABLE {quote(TABLE_NAME)} DROP COLUMN {quote(col)}"))
+                    except Exception as e:
+                        send_response("ERROR", f"Dropping columns in database failed: {e}", code=6)
+                        continue
+
+
+
                 kept = context["selected_features"]
-                send_response("SUCCESS", f"Features selected successfully. Kept columns: {kept}")
+                msg = f"Features selected successfully. Kept columns: {kept}"
+                if engine is not None:
+                    msg += f" Dropped in database: {to_drop}"
+                send_response("SUCCESS", msg)
             
             elif cmd == "TRANSFORM":
                 action = request["action"]
@@ -292,15 +366,19 @@ def main():
                 metric = request["metric"]
                 model = context["model"]
 
+                eval_results = {}
+
                 if context["X_test"] is not None:
                     y_pred = model.predict(context["X_test"])
                     result = METRICS[metric](context["y_test"], y_pred)
+                    eval_results[metric] = result
                 else:
                     y_pred = model.predict(context["X_train"])
                     result = METRICS[metric](context["y_train"], y_pred)
+                    eval_results[metric] = result
                 
                 context["metrics"][metric] = result
-                send_response("SUCCESS", f"Evaluated model with metric {metric}: {result}")
+                send_response("SUCCESS", f"Evaluated model with metric {metric}: {result}", eval_results=eval_results)
 
             elif cmd == "MONITOR":
                 methods = request["methods"]
@@ -313,6 +391,7 @@ def main():
                 deployment_artifact["methods"] = methods
                 deployment_artifact["windows"] = windows
                 deployment_artifact["thresholds"] = thresholds
+                deployment_artifact["db_url"] = context["db_url"]
                 joblib.dump(deployment_artifact, context["path"])
                 send_response("SUCCESS", f"Monitored features selected successfully: {features}")
 

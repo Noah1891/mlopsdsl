@@ -70,6 +70,7 @@ data TypeException
     | unknownHyperparam(str cause)
     | hyperparamTypeMismatch(str cause)
     | schemaInferenceFailed(str cause)
+    | databaseConnectionFailed(str cause)
     | incompatibleMethod(str cause)
     ;
 
@@ -96,8 +97,11 @@ Schema inferSchema(loc csvPath, PID pid) {
     killProcess(pid, force=true);
 
     SchemaJson resp = parseJSON(#SchemaJson, trim(rawResponse));
-    if (resp.status == "ERROR") {
+    if (resp.status == "FILE_ERROR") {
         throw schemaInferenceFailed(resp.message);
+    }
+    if (resp.status == "DB_ERROR") {
+        throw databaseConnectionFailed(resp.message);
     }
 
     Schema schema = ();
@@ -149,21 +153,23 @@ TypeStore checkSteps(steps(Load load, list[Split] _, list[Select] select, list[T
     return store;
 }
 
-TypeStore checkLoad(Load l:stepLoad(StrLit path, StrLit target)) {
+TypeStore checkLoad(Load l:stepLoad(StrLit path, StrLit target, list[StrLit] dbURL)) {
     str p = path.content;
     loc baseDir = l.src.parent;
     loc scriptPath = getPath("schema_infer.py");
     loc csvPath = baseDir + p;
-    PID pid = createProcess(PythonBridge::getPythonExecutable(), args=[scriptPath, csvPath.top]);
+    PID pid = createProcess(PythonBridge::getPythonExecutable(), args=size(dbURL) != 0 ? [scriptPath, csvPath.top, dbURL[0].content] : [scriptPath, csvPath.top]);
     if (!isAlive(pid)) {
         throw schemaInferenceFailed("Could not start schema inference process for <csvPath>");
     }
     try
         Schema schema = inferSchema(csvPath, pid);
     catch schemaInferenceFailed(str cause): {
-        if(isAlive(pid)) {
-            killProcess(pid, force=true);
-        }
+        killProcess(pid, force=true);
+        throw schemaInferenceFailed(cause);
+    }
+    catch databaseConnectionFailed(str cause): {
+        killProcess(pid, force=true);
         throw schemaInferenceFailed(cause);
     }      
     if (target.content notin schema) {
@@ -306,11 +312,11 @@ bool paramTypeMatches(strLit(strLit(str s)), ptEnum(set[str] allowed)) = s in al
 
 default bool paramTypeMatches(Lit _, ParamType _) = false;
 
-void checkEval(stepEval(set[Metric] metrics), TypeStore store) {
+void checkEval(stepEval(set[EvalRule] evalRules), TypeStore store) {
     Task task = store.task;
-    for (Metric metric <- metrics) {
-        if (!metricMatchesTask(metric, task)) {
-            throw incompatibleMetric("Metric <metric> is not compatible with a <task> model.");
+    for (EvalRule evalRule <- evalRules) {
+        if (!metricMatchesTask(evalRule.metric, task)) {
+            throw incompatibleMetric("Metric <evalRule.metric> is not compatible with a <task> model.");
         }
     }
 }

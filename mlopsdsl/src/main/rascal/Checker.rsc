@@ -15,7 +15,7 @@ import Syntax;
 import AST;
 import PythonBridge;
 
-data MLOpsStore = mStore(str targetVariable, rel[loc, Message] messages);
+data MLOpsStore = mStore(str targetVariable, bool dbConnection, Task task, rel[loc, Message] messages);
 
 data ColumnType
     = tInteger()
@@ -80,7 +80,7 @@ Summary mlopsSummaryServiceSem(loc l, AST::Pipeline input) {
 }
 
 MLOpsStore initMLOpsStore() {
-    return mStore("", {});
+    return mStore("", false, null(), {});
 }
 
 MLOpsStore checkStepsSem(AST::Pipeline input, MLOpsStore store) {
@@ -96,6 +96,9 @@ MLOpsStore checkStepsSem(AST::Pipeline input, MLOpsStore store) {
         store = checkTransSem(steps.trans[0], store);
     }
     store = checkModelSem(steps.model, store);
+    if (size(steps.eval) != 0) {
+        store = checkEvalSem(steps.eval[0], store);
+    }
     if (size(steps.monitor) != 0) {
         if (size(steps.deploy) == 0) {
             store.messages += {<steps.monitor[0].src, error("User inputs cannot be monitored without deployed model.", steps.monitor[0].src,
@@ -108,7 +111,7 @@ MLOpsStore checkStepsSem(AST::Pipeline input, MLOpsStore store) {
 }
 
 MLOpsStore checkLoadSem(AST::Load load, MLOpsStore store) {
-    return mStore(load.target.content, store.messages);
+    return mStore(load.target.content, size(load.dbURL) != 0, store.task, store.messages);
 }
 
 MLOpsStore checkSplitSem(AST::Split split, MLOpsStore store) {
@@ -118,7 +121,7 @@ MLOpsStore checkSplitSem(AST::Split split, MLOpsStore store) {
     if (split.trainSize >= 1) {
         store.messages += {<split.src, error("Train size exceeds 1.0",split.src)>};
     }
-    return mStore(store.targetVariable, store.messages);
+    return mStore(store.targetVariable, store.dbConnection, store.task, store.messages);
 }
 
 MLOpsStore checkSelectSem(AST::Select select, MLOpsStore store) {
@@ -137,7 +140,7 @@ MLOpsStore checkSelectSem(AST::Select select, MLOpsStore store) {
             seen += {f.content};
         }
     }
-    return mStore(store.targetVariable, store.messages);
+    return mStore(store.targetVariable, store.dbConnection, store.task, store.messages);
 }
 
 MLOpsStore checkTransSem(AST::Trans trans, MLOpsStore store) {
@@ -183,7 +186,7 @@ MLOpsStore checkTransSem(AST::Trans trans, MLOpsStore store) {
         }
     }
 
-    return mStore(store.targetVariable, store.messages);
+    return mStore(store.targetVariable, store.dbConnection, store.task, store.messages);
 }
 
 tuple[str tr, str feat] evalPrepTransform(prepFill(StrLit feature, FillStrategy _)) {
@@ -203,7 +206,7 @@ tuple[str tr, str feat] evalPrepTransform(prepScale(StrLit feature, ScaleMethod 
 
 MLOpsStore checkModelSem(AST::Model model, MLOpsStore store) {
     store = checkHyperparamsSem(model.expr, store);
-    return mStore(store.targetVariable, store.messages);
+    return mStore(store.targetVariable, store.dbConnection, taskOf(model.expr.algo), store.messages);
 }
 
 MLOpsStore checkHyperparamsSem(AST::ModelExpr expr, MLOpsStore store) {
@@ -218,7 +221,7 @@ MLOpsStore checkHyperparamsSem(AST::ModelExpr expr, MLOpsStore store) {
             store.messages += {<p.val.src, error("\'<p.name>\' has an incompatible value: expected <sig[p.name]>.", p.val.src)>};
         }
     }
-    return mStore(store.targetVariable, store.messages);
+    return mStore(store.targetVariable, store.dbConnection, store.task, store.messages);
 }
 
 ParamSignature signatureOf(algoLR()) = (
@@ -253,7 +256,32 @@ bool paramTypeMatches(strLit(strLit(str s)), ptEnum(set[str] allowed)) = s in al
 
 default bool paramTypeMatches(Lit _, ParamType _) = false;
 
+MLOpsStore checkEvalSem(AST::Eval eval, MLOpsStore store) {
+    Task task = store.task;
+    for (EvalRule evalRule <- eval.evalRules) {
+        Metric m = evalRule.metric;
+        bool classMetric = m is mAccuracy || m is mPrecision || m is mRecall || m is mF1;
+        if (classMetric) {
+            if (evalRule.threshold > 1.0 || evalRule.threshold < 0) {
+                store.messages += {<evalRule.src, error("Threshold for \'<m.name>\' must be between 0 and 1", evalRule.src)>};
+            }
+            if (regression() := task) {
+                store.messages += {<evalRule.src, error("Metric <m.name> is not compatible with a <task> model.", evalRule.src)>};
+            }
+        } else {
+            if (classification() := task) {
+                store.messages += {<evalRule.src, error("Metric <m.name> is not compatible with a <task> model.", evalRule.src)>};
+            }
+        }
+    }
+    return mStore(store.targetVariable, store.dbConnection, store.task, store.messages);
+}
+
 MLOpsStore checkMonitorSem(AST::Monitor monitor, MLOpsStore store) {
+    if (!store.dbConnection) {
+        store.messages += {<monitor.src, error("Cannot store user data for monitoring without connected database.", monitor.src,
+            fixes=prepareNoConnectionFixes(monitor.src))>};
+    }
     list[loc] ruleLocs = [dr.src | dr <- monitor.driftRules];
     set[str] seenFeatures = {};
     for (int i <- [0..size(monitor.driftRules)]) {
@@ -293,18 +321,23 @@ MLOpsStore checkMonitorSem(AST::Monitor monitor, MLOpsStore store) {
         }
     }
 
-    return mStore(store.targetVariable, store.messages);
+    return mStore(store.targetVariable, store.dbConnection, store.task, store.messages);
 }
 
 Summary mlopsSummaryServiceType(loc l, AST::Pipeline input) {
     Summary s = summary(l);
     AST::StrLit path = getCSVPath(input);
-    PID pid = runInferenceScript(l, path);
+    list[AST::StrLit] dbURL = getDBURL(input);
+    PID pid = runInferenceScript(l, path, dbURL);
     SchemaJson resp = retrieveResponse(pid);
     killProcess(pid, force=true);
-    if (resp.status == "ERROR") {
+    if (resp.status == "FILE_ERROR") {
         s.messages += {<path.src, error(resp.message, path.src)>};
         return s;
+    }
+    if (resp.status == "DB_ERROR") {
+        AST::StrLit dbURL = getDBURL(input)[0];
+        s.messages += {<dbURL.src, error(resp.message, dbURL.src)>};
     }
     TypeStore store = initTypeStore(input, resp);
     store = checkStepsType(input, store);
@@ -318,12 +351,18 @@ AST::StrLit getCSVPath(AST::Pipeline input) {
     return load.path;
 }
 
-PID runInferenceScript(loc l, AST::StrLit path) {
+list[AST::StrLit] getDBURL(AST::Pipeline input) {
+    AST::Steps steps = input.steps;
+    AST::Load load = steps.load;
+    return load.dbURL;
+}
+
+PID runInferenceScript(loc l, AST::StrLit path, list[AST::StrLit] dbURL) {
     str p = path.content;
     loc baseDir = l.parent;
     loc csvPath = baseDir + p;
     loc inferenceScript = getPath("schema_infer.py");
-    return createProcess(PythonBridge::getPythonExecutable(), args=[inferenceScript, csvPath.top]);
+    return createProcess(PythonBridge::getPythonExecutable(), args=size(dbURL) != 0 ? [inferenceScript, csvPath.top, dbURL[0].content] : [inferenceScript, csvPath.top]);
 }
 
 SchemaJson retrieveResponse(PID pid) {
@@ -552,6 +591,11 @@ list[CodeAction] prepareNoDeploymentFixes(loc src)
     = [
         action(title="Remove monitoring step", edits=[changed(src.top, [replace(src, "")])]),
         action(title="Add deployment step before monitoring", edits=[changed(src.top, [replace(insertionPointBefore(src), deploymentSnippet(src))])])
+      ];
+
+list[CodeAction] prepareNoConnectionFixes(loc src)
+    = [
+        action(title="Remove monitoring step", edits=[changed(src.top, [replace(src, "")])])
       ];
 
 loc insertionPointBefore(loc src) = src[length=0][end=src.begin];

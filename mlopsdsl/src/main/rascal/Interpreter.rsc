@@ -27,10 +27,11 @@ data PipelineState
     | modelEvaluated()
     | deployed(int port);
 
-data MLOpsStore = store(str name, PipelineState state, str targetVariable, str trainedModelFilePath, bool monitored, Maybe[int] latency) | empty();
+data MLOpsStore = store(str name, PipelineState state, str targetVariable, bool dbConnection, str trainedModelFilePath, bool monitored, Maybe[int] latency) | empty();
 
 data RuntimeException 
-    = invalidTrainSize(str cause)
+    = reRunWithoutDatabase(str cause)
+    | invalidTrainSize(str cause)
     | duplicateFieldSelection(str cause)
     | targetSelectedAsFeature(str cause)
     | targetSelectedForTransform(str cause)
@@ -39,24 +40,30 @@ data RuntimeException
     | targetSelectedForMonitoring(str cause)
     | windowTooSmall(str cause)
     | invalidThreshold(str cause)
+    | evalThresholdNotReached(str cause)
     | noDeploymentDeclared(str cause)
+    | noDBConnection(str cause)
     | invalidLatency(str cause)
+    | pythonRuntimeError(str cause)
     | fileNotFound(str cause)
     | targetNotFound(str cause)
     | featureNotFound(str cause)
     | invalidErrorCode(str cause)
+    | databaseConnectionFailed(str cause)
+    | tableNotFound(str cause)
+    | dropColumnFailed(str cause)
     ;
 
-MLOpsStore evalPipeline(Syntax::Pipeline pipeline) {
+MLOpsStore evalPipeline(Syntax::Pipeline pipeline, bool reRun = false) {
     pipelineAST = implode(#AST::Pipeline, pipeline);
-    return evalPipeline(pipelineAST);
+    return evalPipeline(pipelineAST, reRun);
 }
 
-MLOpsStore evalPipeline(pipeline(str name, Steps steps)) {
+MLOpsStore evalPipeline(pipeline(str name, Steps steps), bool reRun) {
     PID pid = startPythonWorker();
     MLOpsStore s = empty();
     try
-        s = evalSteps(steps, store(name, uninitialized(), "", "", false, nothing()), pid);
+        s = evalSteps(steps, store(name, uninitialized(), "", false, "", false, nothing()), pid, reRun);
     catch RuntimeException e: {
         stopPythonWorker(pid);
         throw e;
@@ -64,8 +71,8 @@ MLOpsStore evalPipeline(pipeline(str name, Steps steps)) {
     return s;
 }
 
-MLOpsStore evalSteps(steps(Load load, list[Split] split, list[Select] select, list[Trans] trans, Model model, list[Eval] eval, list[Deploy] deploy, list[Monitor] monitor), MLOpsStore s, PID pid) {
-    s = evalLoad(load, s, pid);
+MLOpsStore evalSteps(steps(Load load, list[Split] split, list[Select] select, list[Trans] trans, Model model, list[Eval] eval, list[Deploy] deploy, list[Monitor] monitor), MLOpsStore s, PID pid, bool reRun) {
+    s = evalLoad(load, s, pid, reRun);
     if (size(split) != 0) {
         s = evalSplit(split[0], s, pid);
     }
@@ -92,14 +99,17 @@ MLOpsStore evalSteps(steps(Load load, list[Split] split, list[Select] select, li
     return s;
 }
 
-MLOpsStore evalLoad(Load l:stepLoad(StrLit path, StrLit target), MLOpsStore s, PID pid) {
+MLOpsStore evalLoad(Load l:stepLoad(StrLit path, StrLit target, list[StrLit] dbURL), MLOpsStore s, PID pid, bool reRun) {
+    if (reRun && size(dbURL) == 0) {
+        throw reRunWithoutDatabase("A re-run requires a database connection. Without one, run the pipeline normally with an updated CSV.");
+    }
     str p = evalStrLit(path);
     str absolutePath = (l.src.parent + p).path;
     str targetAsStr = evalStrLit(target);
-    PythonCmd cmd = loadCmd("LOAD", absolutePath, targetAsStr);
+    PythonCmd cmd = loadCmd("LOAD", absolutePath, targetAsStr, size(dbURL) != 0 ? evalStrLit(dbURL[0]) : "", reRun);
     PythonResponse res = sendJsonToPython(pid, cmd);
     reportResult(res, "LOAD", l.src);
-    return store(s.name, dataLoaded(), targetAsStr, s.trainedModelFilePath, s.monitored, s.latency);
+    return store(s.name, dataLoaded(), targetAsStr, size(dbURL) != 0, s.trainedModelFilePath, s.monitored, s.latency);
 }
 
 str evalStrLit(strLit(str s)) = s;
@@ -119,7 +129,7 @@ MLOpsStore evalSplit(Split sp:stepSplit(real trainSize, list[int] randomState), 
     PythonCmd cmd = splitCmd("SPLIT", ratioStr, randomStateStr);
     PythonResponse res = sendJsonToPython(pid, cmd);
     reportResult(res, "SPLIT", sp.src);
-    return store(s.name, dataSplit(), s.targetVariable, s.trainedModelFilePath, s.monitored, s.latency);
+    return store(s.name, dataSplit(), s.targetVariable, s.dbConnection, s.trainedModelFilePath, s.monitored, s.latency);
 }
 
 MLOpsStore evalSelect(Select se:stepSelect(list[StrLit] features), MLOpsStore s, PID pid) {
@@ -136,7 +146,7 @@ MLOpsStore evalSelect(Select se:stepSelect(list[StrLit] features), MLOpsStore s,
     PythonCmd cmd = selectCmd("SELECT", strFeatures);
     PythonResponse res = sendJsonToPython(pid, cmd);
     reportResult(res, "SELECT", se.src);
-    return store(s.name, featuresSelected(), s.targetVariable, s.trainedModelFilePath, s.monitored, s.latency);
+    return store(s.name, featuresSelected(), s.targetVariable, s.dbConnection, s.trainedModelFilePath, s.monitored, s.latency);
 }
 
 MLOpsStore evalTrans(Trans t:stepTrans(list[PrepTransform] transforms), MLOpsStore s, PID pid) {
@@ -165,7 +175,7 @@ MLOpsStore evalTrans(Trans t:stepTrans(list[PrepTransform] transforms), MLOpsSto
         PythonResponse res = sendJsonToPython(pid, cmd);
         reportResult(res, "TRANSFORM", t.src);
     }
-    return store(s.name, transformed(), s.targetVariable, s.trainedModelFilePath, s.monitored, s.latency);
+    return store(s.name, transformed(), s.targetVariable, s.dbConnection, s.trainedModelFilePath, s.monitored, s.latency);
 }
 
 tuple[str tr, str feat, str strat] evalPrepTransform(prepFill(StrLit feature, FillStrategy strategy)) {
@@ -212,7 +222,7 @@ MLOpsStore evalModel(Model m:stepModel(modelTrain(Algorithm algo, StrLit path, l
     PythonCmd cmd = trainCmd("TRAIN", algo_as_string, params, modelDir);
     PythonResponse res = sendJsonToPython(pid, cmd);
     reportResult(res, "TRAIN", m.src);
-    return store(s.name, modelTrained(), s.targetVariable, res.modelFilePath, s.monitored, s.latency);
+    return store(s.name, modelTrained(), s.targetVariable, s.dbConnection, res.modelFilePath, s.monitored, s.latency);
 }
 
 str evalAlgo(algoLR()) = "LinReg";
@@ -234,14 +244,24 @@ str evalLit(strLit(StrLit s)) = evalStrLit(s);
 
 str evalLit(boolLit(bool b)) = "<b>";
 
-MLOpsStore evalEval(Eval e:stepEval(set[Metric] metrics), MLOpsStore s, PID pid) {
-    for (Metric metric <- metrics) {
-        metric_as_str = evalMetric(metric);
+MLOpsStore evalEval(Eval e:stepEval(set[EvalRule] evalRules), MLOpsStore s, PID pid) {
+    for (EvalRule evalRule <- evalRules) {
+        <metric_as_str, threshold> = evalEvalRule(evalRule);
+        if (metric_as_str in {"acc", "pre", "rec", "f1"} && (evalRule.threshold > 1.0 || evalRule.threshold < 0)) {
+            throw invalidThreshold("Threshold for \'<metric_as_str>\' must be between 0 and 1");
+        }
         PythonCmd cmd = evalCmd("EVAL", metric_as_str);
         PythonResponse res = sendJsonToPython(pid, cmd);
+        if (res.evalResults[metric_as_str] < threshold) {
+            throw evalThresholdNotReached("Pipeline stopped before potential deployment since evaluation thresholds were not met.");
+        }
         reportResult(res, "EVAL", e.src);
     }
-    return store(s.name, modelEvaluated(), s.targetVariable, s.trainedModelFilePath, s.monitored, s.latency);
+    return store(s.name, modelEvaluated(), s.targetVariable, s.dbConnection, s.trainedModelFilePath, s.monitored, s.latency);
+}
+
+tuple[str, real] evalEvalRule(evalRule(Metric metric, real threshold)) {
+    return <evalMetric(metric), threshold>;
 }
 
 str evalMetric(mAccuracy()) = "acc";
@@ -258,12 +278,15 @@ str evalMetric(mRMSE()) = "rmse";
 
 MLOpsStore evalDeploy(Deploy d:stepDeploy(int port), MLOpsStore s) {
     showMessage(info("[DEPLOY] Gathered deployement information", d.src));
-    return store(s.name, deployed(port), s.targetVariable, s.trainedModelFilePath, s.monitored, s.latency);
+    return store(s.name, deployed(port), s.targetVariable, s.dbConnection, s.trainedModelFilePath, s.monitored, s.latency);
 }
 
 MLOpsStore evalMonitor(Monitor mon:stepMonitor(list[DriftRule] driftRules, list[LatencyRule] latencyRule), MLOpsStore s, PID pid) {
     if (!(deployed(_) := s.state)) {
         throw noDeploymentDeclared("User inputs cannot be monitored without deployed model.");
+    }
+    if (!s.dbConnection) {
+        throw noDBConnection("Cannot store user data for monitoring without connected database.");
     }
     list[str] methods = [];
     list[str] monitored = [];
@@ -296,7 +319,7 @@ MLOpsStore evalMonitor(Monitor mon:stepMonitor(list[DriftRule] driftRules, list[
         }
         ms = just(parsedMs);
     }
-    return store(s.name, s.state, s.targetVariable, s.trainedModelFilePath, size(monitored) != 0, ms);
+    return store(s.name, s.state, s.targetVariable, s.dbConnection, s.trainedModelFilePath, size(monitored) != 0, ms);
 }
 
 tuple[str method, str feat, int win, real threshold] evalDriftRule(ruleDrift(DriftMethod dMethod, StrLit feature, int window, real threshold)) {
@@ -318,15 +341,17 @@ void finalizeDeployment(MLOpsStore s) {
     str fastAPIApp = genFastAPIApp(filePath.file, s.monitored, s.latency);
     str dockerfile = genDockerfile(filePath.file, s.state.port);
     str requirements = genRequirementsTXT(s.monitored);
+    str compose = genDockerCompose(s.state.port, s.monitored);
     writeFile(filePath.parent + "app.py", fastAPIApp);
     writeFile(filePath.parent + "Dockerfile", dockerfile);
     writeFile(filePath.parent + "requirements.txt", requirements);
+    writeFile(filePath.parent + "docker-compose.yml", compose);
 }
 
 void reportResult(PythonResponse res, str step, loc l) {
     if (res.status == "ERROR") {
         if (res.code == 0) {
-            throw "Error: <res.message>";
+            throw pythonRuntimeError(res.message);
         } else {
             throwErrorWithCode(res.code, res.message);
         }
@@ -342,6 +367,12 @@ void throwErrorWithCode(int code, str message) {
             throw targetNotFound(message);
         case 3:
             throw featureNotFound(message);
+        case 4:
+            throw databaseConnectionFailed(message);
+        case 5:
+            throw tableNotFound(message);
+        case 6:
+            throw dropColumnFailed(message);
         default:
             throw invalidErrorCode("This error code is not identified with a specified exception.");
     }

@@ -7,7 +7,7 @@ start syntax Pipeline = pipeline: "pipeline" Id name "{" Steps steps "}";
 
 syntax Steps = steps: Load load Split? split Select? select Trans? trans Model model Eval? eval Deploy? deploy Monitor? monitor; 
 
-syntax Load = stepLoad: "load" "(" "path" "=" StrLit path "," "target" "=" StrLit target ")";
+syntax Load = stepLoad: "load" "(" "path" "=" StrLit path "," "target" "=" StrLit target ("," "databaseURL" "=" StrLit dbURL)? ")";
 
 syntax Split = stepSplit: "split" "(" "train_size" "=" FloatLit trainSize  ("," "random_state" "=" IntLit randomState)? ")";
 
@@ -17,7 +17,7 @@ syntax Trans = stepTrans: "transformation" "(" {PrepTransform ","}+ transforms "
 
 syntax Model = stepModel: "model" ModelExpr expr;
 
-syntax Eval = stepEval: "evaluation" "(" {Metric ","}+ metrics ")";
+syntax Eval = stepEval: "evaluation" "(" {EvalRule ","}+ evalRules ")";
 
 syntax Deploy = stepDeploy: "deployment" "(" "port" "=" IntLit port ")";
 
@@ -49,6 +49,8 @@ syntax Lit = intLit: IntLit
           | floatLit: FloatLit 
           | strLit: StrLit
           | boolLit: BoolLit;
+
+syntax EvalRule = evalRule: Metric metric "\>=" FloatLit threshold;
 
 syntax Metric = mAccuracy: "accuracy"
                 | mPrecision: "precision"

@@ -8,7 +8,7 @@ import String;
 import Set;
 
 data PythonCmd 
-  = loadCmd(str cmd, str path, str target)
+  = loadCmd(str cmd, str path, str target, str dbURL, bool reRun)
   | splitCmd(str cmd, str ratio, str randomState)
   | selectCmd(str cmd, list[str] features)
   | transformCmd(str cmd, str action, str feature, str method)
@@ -18,7 +18,7 @@ data PythonCmd
   ;
 
 data PythonResponse
-  = response(str status, str message, str modelFilePath, int code)
+  = response(str status, str message, str modelFilePath, map[str,real] evalResults, int code)
   ;
 
 public loc getPath(str file) {

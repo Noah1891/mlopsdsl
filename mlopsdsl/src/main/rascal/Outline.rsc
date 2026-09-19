@@ -43,6 +43,13 @@ DocumentSymbol loadToOutline(l:(Load) `load ( path = <StrLit path> , target = <S
         symbol("target: <target>", DocumentSymbolKind::\string(), target.src)
     ]);
 
+DocumentSymbol loadToOutline(l:(Load) `load ( path = <StrLit path> , target = <StrLit target> , databaseURL = <StrLit dbURL> )`) =
+    symbol("load", DocumentSymbolKind::\constructor(), l.src, children=[
+        symbol("path: <path>", DocumentSymbolKind::\string(), path.src),
+        symbol("target: <target>", DocumentSymbolKind::\string(), target.src),
+        symbol("databaseURL: <dbURL>", DocumentSymbolKind::\string(), dbURL.src)
+    ]);
+
 DocumentSymbol splitToOutline(s:(Split) `split ( train_size = <FloatLit trainSize> , random_state = <IntLit randomState> )`) =
     symbol("split", DocumentSymbolKind::\constructor(), s.src, children=[
         symbol("train_size: <trainSize>", DocumentSymbolKind::\number(), trainSize.src),
@@ -86,8 +93,8 @@ DocumentSymbol modelExprToOutline(me:(ModelExpr) `<Algorithm algo> ( dir = <StrL
     return symbol("model: <algo>", DocumentSymbolKind::\class(), me.src, children=[outputDirSymbol]);
 }
 
-DocumentSymbol evalToOutline(e:(Eval) `evaluation ( <{Metric ","}+ metrics> )`) {
-    list[DocumentSymbol] metricSymbols = [symbol("<m>", DocumentSymbolKind::\enumMember(), m.src) | Metric m <- metrics];
+DocumentSymbol evalToOutline(e:(Eval) `evaluation ( <{EvalRule ","}+ evalRules> )`) {
+    list[DocumentSymbol] metricSymbols = [symbol("<em>", DocumentSymbolKind::\property(), em.src) | EvalRule em <- evalRules];
     return symbol("evaluation", DocumentSymbolKind::\constructor(), e.src, children=metricSymbols);
 }
 

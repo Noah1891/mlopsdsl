@@ -4,7 +4,7 @@ data Pipeline(loc src=|unknown:///|) = pipeline(str name, Steps steps);
 
 data Steps = steps(Load load, list[Split] split, list[Select] select, list[Trans] trans, Model model, list[Eval] eval, list[Deploy] deploy, list[Monitor] monitor);
 
-data Load(loc src=|unknown:///|) = stepLoad(StrLit path, StrLit target);
+data Load(loc src=|unknown:///|) = stepLoad(StrLit path, StrLit target, list[StrLit] dbURL);
 
 data Split(loc src=|unknown:///|) = stepSplit(real trainSize, list[int] randomState);
 
@@ -14,7 +14,7 @@ data Trans(loc src=|unknown:///|) = stepTrans(list[PrepTransform] transforms);
 
 data Model(loc src=|unknown:///|) = stepModel(ModelExpr expr);
 
-data Eval(loc src=|unknown:///|) = stepEval(set[Metric] metrics);
+data Eval(loc src=|unknown:///|) = stepEval(set[EvalRule] evalRules);
 
 data Deploy(loc src=|unknown:///|) = stepDeploy(int port);
 
@@ -47,12 +47,14 @@ data Lit(loc src=|unknown:///|) = intLit(int intVal)
          | strLit(StrLit strVal)
          | boolLit(bool boolVal);
 
-data Metric(loc src=|unknown:///|) = mAccuracy()
-            | mPrecision()
-            | mRecall()
-            | mF1()
-            | mMSE()
-            | mRMSE();
+data EvalRule(loc src=|unknown:///|) = evalRule(Metric metric, real threshold);
+
+data Metric(loc src=|unknown:///|) = mAccuracy(str name = "accuracy")
+            | mPrecision(str name = "precision")
+            | mRecall(str name = "recall")
+            | mF1(str name = "f1")
+            | mMSE(str name = "mse")
+            | mRMSE(str name = "rmse");
 
 data DriftRule(loc src=|unknown:///|) = ruleDrift(DriftMethod dMethod, StrLit feature, int window, real threshold);
 
