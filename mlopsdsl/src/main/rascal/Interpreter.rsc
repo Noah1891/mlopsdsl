@@ -11,6 +11,7 @@ import IO;
 import util::IDEServices;
 import Message;
 import util::Maybe;
+import Exception;
 
 import Syntax;
 import AST;
@@ -45,6 +46,7 @@ data RuntimeException
     | evalThresholdNotReached(str cause)
     | noDeploymentDeclared(str cause)
     | noDBConnection(str cause)
+    | duplicateMonitoredField(str cause)
     | invalidLatency(str cause)
     | pythonRuntimeError(str cause)
     | fileNotFound(str cause)
@@ -303,10 +305,14 @@ MLOpsStore evalMonitor(Monitor mon:stepMonitor(list[DriftRule] driftRules, list[
     list[int] freqs = [];
     list[real] minEffects = [];
     list[real] thresholds = [];
+    set[str] seenFeatures = {};
     for (DriftRule driftRule <- driftRules) {
         tuple[str meth, str feat, int win, int freq, real minEffect, real threshold] dRule = evalDriftRule(driftRule);
         if (dRule.feat == s.targetVariable) {
             throw targetSelectedForMonitoring("The target can not be selected as a monitored feature.");
+        }
+        if (dRule.feat in seenFeatures) {
+            throw duplicateMonitoredField("Feature \'<dRule.feat>\' is monitored more than once.");
         }
         if (dRule.win < 500) {
             showMessage(warning("[MONITOR] Monitoring was set up with small window. Recommendation is 500 or higher.", mon.src));
@@ -329,6 +335,7 @@ MLOpsStore evalMonitor(Monitor mon:stepMonitor(list[DriftRule] driftRules, list[
         freqs += dRule.freq;
         minEffects += dRule.minEffect;
         thresholds += dRule.threshold;
+        seenFeatures += {dRule.feat};
     }
     PythonCmd cmd = monitorCmd("MONITOR", methods, monitored, windows, freqs, minEffects, thresholds);
     PythonResponse res = sendJsonToPython(pid, cmd);

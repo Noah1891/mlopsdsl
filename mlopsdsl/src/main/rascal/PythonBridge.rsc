@@ -6,6 +6,15 @@ import lang::json::IO;
 import IO;
 import String;
 import Set;
+import Exception;
+
+data RuntimeException
+    = resourceNotFound(str cause)
+    | pythonEnvNotFound(str cause)
+    | workerStartFailed(str cause)
+    | workerCrashed(str cause)
+    | workerTimeout(str cause)
+    ;
 
 data PythonCmd 
   = loadCmd(str cmd, str path, str target, str dbURL, bool reRun)
@@ -24,7 +33,7 @@ data PythonResponse
 public loc getPath(str file) {
     set[loc] found = findResources(file);
     if (size(found) != 1) {
-        throw "Expected exactly one file with name <file>, found <size(found)>: <found>";
+        throw resourceNotFound("Expected exactly one file with name <file>, found <size(found)>: <found>");
     }
     return getSingleFrom(found);
 }
@@ -45,44 +54,42 @@ modes resolve `findResources` relative to their configured source/classpath root
 public loc getPythonExecutable() {
     set[loc] found = findResources(pythonExecutableRelPath());
     if (size(found) != 1) {
-        throw "Python environment (.mlopsenv) not found or ambiguous (<size(found)> matches). " +
-              "Make sure the Python environment for this extension has been set up.";
+        throw pythonEnvNotFound("Python environment (.mlopsenv) not found or ambiguous (<size(found)> matches). " +
+                                "Make sure the Python environment for this extension has been set up.");
     }
     return getSingleFrom(found);
 }
 
 PID startPythonWorker() {
     PID pid = createProcess(getPythonExecutable(), args=[getPath("pipeline_worker.py")]);
-    if (!isAlive(pid)) throw "Error: Python worker could not be started.";
+    if (!isAlive(pid)) throw workerStartFailed("Python worker could not be started.");
     return pid;
 }
 
 PythonResponse sendJsonToPython(PID pid, PythonCmd command) {
     str jsonPayload = asJSON(command);
-    
     writeTo(pid, jsonPayload + "\n");
-    
     str rawResponse = "";
     int tries = 0;
     while (rawResponse == "" && tries < 60) {
         rawResponse = readWithWait(pid, 500);
         tries += 1;
-        
         if (!isAlive(pid) && rawResponse == "") {
             str err = readFromErr(pid);
-            throw "Python process crashed! Error: <err>";
+            throw workerCrashed("Python process crashed! Error: <err>");
         }
     }
-    
-    if (rawResponse == "") throw "Timeout: Python worker does not respond.";
-    
+    if (rawResponse == "") throw workerTimeout("Timeout: Python worker does not respond.");
     PythonResponse resp = parseJSON(#PythonResponse, trim(rawResponse));
-    
     return resp;
 }
 
 void stopPythonWorker(PID pid) {
-    if (isAlive(pid)) {
-        killProcess(pid, force=true);
+    try {
+        if (isAlive(pid) || isZombie(pid)) {
+            killProcess(pid, force=true);
+        }
+    } catch RuntimeException _: {
+        return;   // Prozess war schon aufgeräumt
     }
 }

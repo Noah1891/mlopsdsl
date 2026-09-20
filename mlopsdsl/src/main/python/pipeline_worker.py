@@ -112,7 +112,7 @@ def main():
                     full_df.columns = [str(c) for c in full_df.columns]
 
                     if context["target"] not in full_df.columns:
-                        send_response("ERROR", f"Specified target {context["target"]} is not a column in table '{TABLE_NAME}'.",
+                        send_response("ERROR", f"Specified target {context['target']} is not a column in table '{TABLE_NAME}'.",
                                       code=2)
                         continue
 
