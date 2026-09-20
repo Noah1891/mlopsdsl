@@ -40,6 +40,7 @@ data RuntimeException
     | targetSelectedForMonitoring(str cause)
     | windowTooSmall(str cause)
     | invalidThreshold(str cause)
+    | invalidFrequency(str cause)
     | invalidMinEffect(str cause)
     | evalThresholdNotReached(str cause)
     | noDeploymentDeclared(str cause)
@@ -312,6 +313,9 @@ MLOpsStore evalMonitor(Monitor mon:stepMonitor(list[DriftRule] driftRules, list[
         }
         if (dRule.threshold <= 0) {
             throw invalidThreshold("The threshold cannot be negative or 0.");
+        }
+        if (dRule.freq <= 0) {
+            throw invalidFrequency("The drift calculation frequency cannot be negative or 0");
         }
         if (dRule.meth == "KS" && dRule.minEffect >= 1) {
             throw invalidMinEffect("The minimal effect bound cannot be greater or equal to 1");

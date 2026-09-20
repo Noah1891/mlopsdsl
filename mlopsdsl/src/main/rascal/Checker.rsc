@@ -310,6 +310,9 @@ MLOpsStore checkMonitorSem(AST::Monitor monitor, MLOpsStore store) {
         if (dRule.threshold <= 0) {
             store.messages += {<driftRule.src, error("The threshold cannot be negative or 0.", driftRule.src)>};
         }
+        if (dRule.freq <= 0) {
+            store.messages += {<driftRule.src, error("The drift calculation frequency cannot be negative or 0.", driftRule.src)>};
+        }
         if (dmKS() := driftRule.dMethod && dRule.minEffect >= 1) {
             store.messages += {<driftRule.src, error("The minimum effect bound cannot be greater or equal to 1", driftRule.src)>};
         }
