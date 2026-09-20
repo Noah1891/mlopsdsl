@@ -305,7 +305,7 @@ MLOpsStore checkMonitorSem(AST::Monitor monitor, MLOpsStore store) {
             seenFeatures += {dRule.feat};
         }
         if (dRule.win < 500) {
-            store.messages += {<driftRule.src, error("The window for drift calculation is too small.", driftRule.src)>};
+            store.messages += {<driftRule.src, warning("The window for drift calculation is small. Recommended is 500 or higher.", driftRule.src)>};
         }
         if (dRule.threshold <= 0) {
             store.messages += {<driftRule.src, error("The threshold cannot be negative or 0.", driftRule.src)>};
@@ -581,13 +581,13 @@ TypeStore checkMonitorTypes(AST::Monitor monitor, TypeStore store) {
         }
         switch(driftRule.dMethod) {
             case dmKS(): {
-                if (oldType notin {tInteger(), tFloat()}) {
-                    store.messages += {<driftRule.dMethod.src, error("The Kolmogorow-Smirnow method is only used for numerical features but <feat.content> is type <oldType>", driftRule.dMethod.src)>};
+                if (oldType in {tInteger(), tCategorical(), tBoolean()}) {
+                    store.messages += {<driftRule.dMethod.src, warning("The Kolmogorow-Smirnow method is normally only used for numerical features but <feat.content> is type <oldType>", driftRule.dMethod.src)>};
                 }
             }
             case dmChiSquare(): {
-                if (!(oldType is tCategorical)) {
-                    store.messages += {<driftRule.dMethod.src, error("The Chi² method is only used for categorical features but <feat.content> is type <oldType>", driftRule.dMethod.src)>};
+                if (oldType in {tInteger(), tFloat()}) {
+                    store.messages += {<driftRule.dMethod.src, warning("The Chi² method is normally only used for categorical features but <feat.content> is type <oldType>", driftRule.dMethod.src)>};
                 }
             }
         }

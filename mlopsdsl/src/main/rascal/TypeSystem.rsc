@@ -162,16 +162,13 @@ TypeStore checkLoad(Load l:stepLoad(StrLit path, StrLit target, list[StrLit] dbU
     if (!isAlive(pid)) {
         throw schemaInferenceFailed("Could not start schema inference process for <csvPath>");
     }
-    try
-        Schema schema = inferSchema(csvPath, pid);
-    catch schemaInferenceFailed(str cause): {
-        killProcess(pid, force=true);
-        throw schemaInferenceFailed(cause);
+    Schema schema = ();
+    try {
+        schema = inferSchema(csvPath, pid);
     }
     catch databaseConnectionFailed(str cause): {
-        killProcess(pid, force=true);
-        throw schemaInferenceFailed(cause);
-    }      
+        throw databaseConnectionFailed(cause);
+    }
     if (target.content notin schema) {
         throw unknownColumn("Target column \'<target.content>\' not found in dataset.");
     }
@@ -337,7 +334,7 @@ str metricName(evalCRule(CMetric m, _)) = m.name;
 
 str metricName(evalRRule(RMetric m, _)) = m.name;
 
-void checkMonitor(stepMonitor(list[DriftRule] driftRules, list[LatencyRule] _), TypeStore store) {
+void checkMonitor(Monitor mon:stepMonitor(list[DriftRule] driftRules, list[LatencyRule] _), TypeStore store) {
     Schema schema = store.schema;
     for (DriftRule driftRule <- driftRules) {
         str feat = driftRule.feature.content;
@@ -350,13 +347,13 @@ void checkMonitor(stepMonitor(list[DriftRule] driftRules, list[LatencyRule] _), 
         }
         switch(driftRule.dMethod) {
             case dmKS(): {
-                if (oldType notin {tInteger(), tFloat()}) {
-                    throw incompatibleMethod("The Kolmogorow-Smirnow method is only used for numerical features but <feat> is type <oldType>");
+                if (oldType in {tInteger(), tCategorical(), tBoolean()}) {
+                    showMessage(warning("The Kolmogorow-Smirnow method is normally only used for numerical features but <feat> is type <oldType>", mon.src));
                 }
             }
             case dmChiSquare(): {
-                if (!(oldType is tCategorical)) {
-                    throw incompatibleMethod("The Chi² method is only used for categorical features but <feat> is type <oldType>");
+                if (oldType in {tInteger(), tFloat()}) {
+                    showMessage(warning("The Chi² method is normally only used for categorical features but <feat> is type <oldType>", mon.src));
                 }
             }
         }

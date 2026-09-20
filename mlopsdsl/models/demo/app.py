@@ -56,7 +56,7 @@ def python_type_for(series: pd.Series):
     dtype = series.dtype
     if pdt.is_bool_dtype(dtype):
         return bool
-if pdt.is_integer_dtype(dtype):
+    if pdt.is_integer_dtype(dtype):
         return int
     if pdt.is_numeric_dtype(dtype):
         return float

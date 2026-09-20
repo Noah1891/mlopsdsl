@@ -308,7 +308,7 @@ MLOpsStore evalMonitor(Monitor mon:stepMonitor(list[DriftRule] driftRules, list[
             throw targetSelectedForMonitoring("The target can not be selected as a monitored feature.");
         }
         if (dRule.win < 500) {
-            throw windowTooSmall("The window for drift calculation is too small.");
+            showMessage(warning("[MONITOR] Monitoring was set up with small window. Recommendation is 500 or higher.", mon.src));
         }
         if (dRule.threshold <= 0) {
             throw invalidThreshold("The threshold cannot be negative or 0.");
