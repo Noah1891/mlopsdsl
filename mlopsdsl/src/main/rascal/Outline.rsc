@@ -112,5 +112,5 @@ DocumentSymbol monitorToOutline(mon:(Monitor) `monitoring ( <{DriftRule ","}* dr
     return symbol("monitoring", DocumentSymbolKind::\constructor(), mon.src, children=children);
 }
 
-DocumentSymbol driftRuleToOutline(dr:(DriftRule) `<DriftMethod dMethod> ( feature = <StrLit feature> , window = <IntLit window> ) \<= <FloatLit threshold>`) =
+DocumentSymbol driftRuleToOutline(dr:(DriftRule) `<DriftMethod dMethod> ( feature = <StrLit feature> , window = <IntLit window> , checkFrequency = <IntLit freq> , minEffect = <FloatLit minEffect>) \<= <FloatLit threshold>`) =
     symbol("<dMethod>(<feature>, window=<window>) \<= <threshold>", DocumentSymbolKind::\property(), dr.src);

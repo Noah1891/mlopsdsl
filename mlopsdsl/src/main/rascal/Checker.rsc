@@ -259,22 +259,28 @@ default bool paramTypeMatches(Lit _, ParamType _) = false;
 MLOpsStore checkEvalSem(AST::Eval eval, MLOpsStore store) {
     Task task = store.task;
     for (EvalRule evalRule <- eval.evalRules) {
-        Metric m = evalRule.metric;
-        bool classMetric = m is mAccuracy || m is mPrecision || m is mRecall || m is mF1;
-        if (classMetric) {
-            if (evalRule.threshold > 1.0 || evalRule.threshold < 0) {
-                store.messages += {<evalRule.src, error("Threshold for \'<m.name>\' must be between 0 and 1", evalRule.src)>};
-            }
-            if (regression() := task) {
-                store.messages += {<evalRule.src, error("Metric <m.name> is not compatible with a <task> model.", evalRule.src)>};
-            }
-        } else {
-            if (classification() := task) {
-                store.messages += {<evalRule.src, error("Metric <m.name> is not compatible with a <task> model.", evalRule.src)>};
-            }
-        }
+        store.messages += checkEvalRule(evalRule, task);
     }
     return mStore(store.targetVariable, store.dbConnection, store.task, store.messages);
+}
+
+rel[loc, Message] checkEvalRule(EvalRule er:evalCRule(CMetric m, real threshold), Task task) {
+    rel[loc, Message] msgs = {};
+    if (threshold > 1.0 || threshold < 0) {
+        msgs += {<er.src, error("Threshold for \'<m.name>\' must be between 0 and 1", er.src)>};
+    }
+    if (regression() := task) {
+        msgs += {<er.src, error("Metric <m.name> is not compatible with a <task> model.", er.src)>};
+    }
+    return msgs;
+}
+
+rel[loc, Message] checkEvalRule(EvalRule er:evalRRule(RMetric m, real threshold), Task task) {
+    rel[loc, Message] msgs = {};
+    if (classification() := task) {
+        msgs += {<er.src, error("Metric <m.name> is not compatible with a <task> model.", er.src)>};
+    }
+    return msgs;
 }
 
 MLOpsStore checkMonitorSem(AST::Monitor monitor, MLOpsStore store) {
@@ -286,27 +292,29 @@ MLOpsStore checkMonitorSem(AST::Monitor monitor, MLOpsStore store) {
     set[str] seenFeatures = {};
     for (int i <- [0..size(monitor.driftRules)]) {
         AST::DriftRule driftRule = monitor.driftRules[i];
-        tuple[str feat, int win, real threshold] dRule = <driftRule.feature.content, driftRule.window, driftRule.threshold>;
+        tuple[str feat, int win, int freq, real minEffect, real threshold] dRule = <driftRule.feature.content, driftRule.window, driftRule.freq, driftRule.minEffect, driftRule.threshold>;
 
         if (dRule.feat == store.targetVariable) {
             store.messages += {<driftRule.src, error("The target can not be selected as a monitored feature.", driftRule.src,
                 fixes=removeEntryFix("Remove monitoring of target column", ruleLocs, i))>};
-            continue;
         }
         if (dRule.feat in seenFeatures) {
             store.messages += {<driftRule.src, error("Feature \'<dRule.feat>\' is monitored more than once.", driftRule.src,
                 fixes=removeEntryFix("Remove duplicate monitoring of feature", ruleLocs, i))>};
-            continue;
         } else {
             seenFeatures += {dRule.feat};
         }
         if (dRule.win < 500) {
             store.messages += {<driftRule.src, error("The window for drift calculation is too small.", driftRule.src)>};
-            continue;
         }
         if (dRule.threshold <= 0) {
             store.messages += {<driftRule.src, error("The threshold cannot be negative or 0.", driftRule.src)>};
-            continue;
+        }
+        if (dmKS() := driftRule.dMethod && dRule.minEffect >= 1) {
+            store.messages += {<driftRule.src, error("The minimum effect bound cannot be greater or equal to 1", driftRule.src)>};
+        }
+        if (dRule.minEffect < 0) {
+            store.messages += {<driftRule.src, error("The minimum effect bound cannot be smaller than 0", driftRule.src)>};
         }
     }
 

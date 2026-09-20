@@ -315,8 +315,8 @@ default bool paramTypeMatches(Lit _, ParamType _) = false;
 void checkEval(stepEval(set[EvalRule] evalRules), TypeStore store) {
     Task task = store.task;
     for (EvalRule evalRule <- evalRules) {
-        if (!metricMatchesTask(evalRule.metric, task)) {
-            throw incompatibleMetric("Metric <evalRule.metric> is not compatible with a <task> model.");
+        if (!ruleMatchesTask(evalRule, task)) {
+            throw incompatibleMetric("Metric <metricName(evalRule)> is not compatible with a <task> model.");
         }
     }
 }
@@ -327,19 +327,15 @@ Task taskOf(algoRF()) = classification();
 
 Task taskOf(algoLogReg()) = classification();
 
-bool metricMatchesTask(mAccuracy(), classification()) = true;
+bool ruleMatchesTask(evalCRule(_, _), classification()) = true;
 
-bool metricMatchesTask(mPrecision(), classification()) = true;
+bool ruleMatchesTask(evalRRule(_, _), regression()) = true;
 
-bool metricMatchesTask(mRecall(), classification()) = true;
+default bool ruleMatchesTask(EvalRule _, Task _) = false;
 
-bool metricMatchesTask(mF1(), classification()) = true;
+str metricName(evalCRule(CMetric m, _)) = m.name;
 
-bool metricMatchesTask(mMSE(), regression()) = true;
-
-bool metricMatchesTask(mRMSE(), regression()) = true;
-
-default bool metricMatchesTask(Metric _, Task _) = false;
+str metricName(evalRRule(RMetric m, _)) = m.name;
 
 void checkMonitor(stepMonitor(list[DriftRule] driftRules, list[LatencyRule] _), TypeStore store) {
     Schema schema = store.schema;

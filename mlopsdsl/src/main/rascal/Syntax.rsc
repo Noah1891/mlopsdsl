@@ -50,16 +50,18 @@ syntax Lit = intLit: IntLit
           | strLit: StrLit
           | boolLit: BoolLit;
 
-syntax EvalRule = evalRule: Metric metric "\>=" FloatLit threshold;
+syntax EvalRule = evalCRule: CMetric cMetric "\>=" FloatLit threshold 
+                | evalRRule: RMetric rMetric "\<=" FloatLit threshold;
 
-syntax Metric = mAccuracy: "accuracy"
+syntax CMetric = mAccuracy: "accuracy"
                 | mPrecision: "precision"
                 | mRecall: "recall"
-                | mF1: "f1"
-                | mMSE: "mse"
+                | mF1: "f1";
+
+syntax RMetric = mMSE: "mse"
                 | mRMSE: "rmse";
 
-syntax DriftRule = ruleDrift: DriftMethod dMethod "(" "feature" "=" StrLit feature "," "window" "=" IntLit window ")" "\<=" FloatLit threshold;
+syntax DriftRule = ruleDrift: DriftMethod dMethod "(" "feature" "=" StrLit feature "," "window" "=" IntLit window "," "checkFrequency" "=" IntLit freq "," "minEffect" "=" FloatLit minEffect ")" "\<=" FloatLit threshold;
 
 syntax DriftMethod = dmKS: "driftKS" | dmChiSquare: "driftChiSquare";
 

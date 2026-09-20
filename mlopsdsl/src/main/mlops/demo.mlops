@@ -37,7 +37,7 @@ pipeline demo {
     )
 
     monitoring (
-        driftKS(feature = "Pclass", window = 500) <= 0.05,
+        driftKS(feature = "Pclass", window = 500, checkFrequency = 50, minEffect = 0.1) <= 0.05,
         latency <= 500
     )
 }

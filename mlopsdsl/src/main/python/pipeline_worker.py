@@ -384,12 +384,16 @@ def main():
                 methods = request["methods"]
                 features = request["features"]
                 windows = request["windows"]
+                frequencies = request["frequencies"]
+                min_effects = request["minEffects"]
                 thresholds = request["thresholds"]
 
                 deployment_artifact = joblib.load(context["path"])
                 deployment_artifact["baseline_df"] = context["baseline_df"][features]
                 deployment_artifact["methods"] = methods
                 deployment_artifact["windows"] = windows
+                deployment_artifact["check_every"] = frequencies
+                deployment_artifact["min_effects"] = min_effects
                 deployment_artifact["thresholds"] = thresholds
                 deployment_artifact["db_url"] = context["db_url"]
                 joblib.dump(deployment_artifact, context["path"])

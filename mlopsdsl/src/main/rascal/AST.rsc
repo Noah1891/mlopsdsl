@@ -47,16 +47,18 @@ data Lit(loc src=|unknown:///|) = intLit(int intVal)
          | strLit(StrLit strVal)
          | boolLit(bool boolVal);
 
-data EvalRule(loc src=|unknown:///|) = evalRule(Metric metric, real threshold);
+data EvalRule(loc src=|unknown:///|) = evalCRule(CMetric cMetric, real threshold)
+                                     | evalRRule(RMetric rMetric, real threshold);
 
-data Metric(loc src=|unknown:///|) = mAccuracy(str name = "accuracy")
+data CMetric(loc src=|unknown:///|) = mAccuracy(str name = "accuracy")
             | mPrecision(str name = "precision")
             | mRecall(str name = "recall")
-            | mF1(str name = "f1")
-            | mMSE(str name = "mse")
-            | mRMSE(str name = "rmse");
+            | mF1(str name = "f1");
 
-data DriftRule(loc src=|unknown:///|) = ruleDrift(DriftMethod dMethod, StrLit feature, int window, real threshold);
+data RMetric(loc src=|unknown:///|) = mMSE(str name = "mse")
+                                    | mRMSE(str name = "rmse");
+
+data DriftRule(loc src=|unknown:///|) = ruleDrift(DriftMethod dMethod, StrLit feature, int window, int freq, real minEffect, real threshold);
 
 data DriftMethod(loc src=|unknown:///|) = dmKS() | dmChiSquare(); 
 

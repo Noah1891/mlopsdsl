@@ -40,6 +40,7 @@ data RuntimeException
     | targetSelectedForMonitoring(str cause)
     | windowTooSmall(str cause)
     | invalidThreshold(str cause)
+    | invalidMinEffect(str cause)
     | evalThresholdNotReached(str cause)
     | noDeploymentDeclared(str cause)
     | noDBConnection(str cause)
@@ -246,13 +247,18 @@ str evalLit(boolLit(bool b)) = "<b>";
 
 MLOpsStore evalEval(Eval e:stepEval(set[EvalRule] evalRules), MLOpsStore s, PID pid) {
     for (EvalRule evalRule <- evalRules) {
-        <metric_as_str, threshold> = evalEvalRule(evalRule);
-        if (metric_as_str in {"acc", "pre", "rec", "f1"} && (evalRule.threshold > 1.0 || evalRule.threshold < 0)) {
+        <metric_as_str, threshold, higherIsBetter> = evalEvalRule(evalRule);
+
+        if (higherIsBetter && (threshold > 1.0 || threshold < 0)) {
             throw invalidThreshold("Threshold for \'<metric_as_str>\' must be between 0 and 1");
         }
+
         PythonCmd cmd = evalCmd("EVAL", metric_as_str);
         PythonResponse res = sendJsonToPython(pid, cmd);
-        if (res.evalResults[metric_as_str] < threshold) {
+        real val = res.evalResults[metric_as_str];
+
+        bool reached = higherIsBetter ? val >= threshold : val <= threshold;
+        if (!reached) {
             throw evalThresholdNotReached("Pipeline stopped before potential deployment since evaluation thresholds were not met.");
         }
         reportResult(res, "EVAL", e.src);
@@ -260,21 +266,23 @@ MLOpsStore evalEval(Eval e:stepEval(set[EvalRule] evalRules), MLOpsStore s, PID 
     return store(s.name, modelEvaluated(), s.targetVariable, s.dbConnection, s.trainedModelFilePath, s.monitored, s.latency);
 }
 
-tuple[str, real] evalEvalRule(evalRule(Metric metric, real threshold)) {
-    return <evalMetric(metric), threshold>;
-}
+tuple[str, real, bool] evalEvalRule(evalCRule(CMetric metric, real threshold))
+    = <evalCMetric(metric), threshold, true>;
 
-str evalMetric(mAccuracy()) = "acc";
+tuple[str, real, bool] evalEvalRule(evalRRule(RMetric metric, real threshold))
+    = <evalRMetric(metric), threshold, false>;
 
-str evalMetric(mPrecision()) = "pre";
+str evalCMetric(mAccuracy())  = "acc";
 
-str evalMetric(mRecall()) = "rec";
+str evalCMetric(mPrecision()) = "pre";
 
-str evalMetric(mF1()) = "f1";
+str evalCMetric(mRecall())    = "rec";
 
-str evalMetric(mMSE()) = "mse";
+str evalCMetric(mF1())        = "f1";
 
-str evalMetric(mRMSE()) = "rmse";
+str evalRMetric(mMSE())  = "mse";
+
+str evalRMetric(mRMSE()) = "rmse";
 
 MLOpsStore evalDeploy(Deploy d:stepDeploy(int port), MLOpsStore s) {
     showMessage(info("[DEPLOY] Gathered deployement information", d.src));
@@ -291,9 +299,11 @@ MLOpsStore evalMonitor(Monitor mon:stepMonitor(list[DriftRule] driftRules, list[
     list[str] methods = [];
     list[str] monitored = [];
     list[int] windows = [];
+    list[int] freqs = [];
+    list[real] minEffects = [];
     list[real] thresholds = [];
     for (DriftRule driftRule <- driftRules) {
-        tuple[str meth, str feat, int win, real threshold] dRule = evalDriftRule(driftRule);
+        tuple[str meth, str feat, int win, int freq, real minEffect, real threshold] dRule = evalDriftRule(driftRule);
         if (dRule.feat == s.targetVariable) {
             throw targetSelectedForMonitoring("The target can not be selected as a monitored feature.");
         }
@@ -303,12 +313,20 @@ MLOpsStore evalMonitor(Monitor mon:stepMonitor(list[DriftRule] driftRules, list[
         if (dRule.threshold <= 0) {
             throw invalidThreshold("The threshold cannot be negative or 0.");
         }
+        if (dRule.meth == "KS" && dRule.minEffect >= 1) {
+            throw invalidMinEffect("The minimal effect bound cannot be greater or equal to 1");
+        }
+        if (dRule.minEffect < 0) {
+            throw invalidMinEffect("The minimal effect bound cannot be smmaller than 0");
+        }
         methods += dRule.meth;
         monitored += dRule.feat;
         windows += dRule.win;
+        freqs += dRule.freq;
+        minEffects += dRule.minEffect;
         thresholds += dRule.threshold;
     }
-    PythonCmd cmd = monitorCmd("MONITOR", methods, monitored, windows, thresholds);
+    PythonCmd cmd = monitorCmd("MONITOR", methods, monitored, windows, freqs, minEffects, thresholds);
     PythonResponse res = sendJsonToPython(pid, cmd);
     reportResult(res, "MONITOR", mon.src);
     Maybe[int] ms = nothing();
@@ -322,10 +340,10 @@ MLOpsStore evalMonitor(Monitor mon:stepMonitor(list[DriftRule] driftRules, list[
     return store(s.name, s.state, s.targetVariable, s.dbConnection, s.trainedModelFilePath, size(monitored) != 0, ms);
 }
 
-tuple[str method, str feat, int win, real threshold] evalDriftRule(ruleDrift(DriftMethod dMethod, StrLit feature, int window, real threshold)) {
+tuple[str method, str feat, int win, int freq, real minEffect, real threshold] evalDriftRule(ruleDrift(DriftMethod dMethod, StrLit feature, int window, int freq, real minEffect, real threshold)) {
     str feat = evalStrLit(feature);
     str method = evalDriftMethod(dMethod);
-    return <method, feat, window, threshold>;
+    return <method, feat, window, freq, minEffect, threshold>;
 }
 
 int evalLatencyRule(ruleLatency(int ms)) {
