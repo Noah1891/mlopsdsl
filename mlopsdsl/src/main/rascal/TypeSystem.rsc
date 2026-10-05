@@ -334,9 +334,9 @@ str metricName(evalCRule(CMetric m, _)) = m.name;
 
 str metricName(evalRRule(RMetric m, _)) = m.name;
 
-void checkMonitor(Monitor mon:stepMonitor(list[DriftRule] driftRules, list[LatencyRule] _), TypeStore store) {
+void checkMonitor(Monitor mon, TypeStore store) {
     Schema schema = store.schema;
-    for (DriftRule driftRule <- driftRules) {
+    for (DriftRule driftRule <- driftRulesOf(mon)) {
         str feat = driftRule.feature.content;
         if (feat notin schema) {
             throw unknownColumn("Column \'<feat>\' not found.");
@@ -359,3 +359,6 @@ void checkMonitor(Monitor mon:stepMonitor(list[DriftRule] driftRules, list[Laten
         }
     }
 }
+
+list[DriftRule] driftRulesOf(stepMonitor(list[DriftRule] drs, _)) = drs;
+list[DriftRule] driftRulesOf(stepMonitorLatency(_)) = [];

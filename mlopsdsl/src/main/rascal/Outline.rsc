@@ -101,16 +101,21 @@ DocumentSymbol evalToOutline(e:(Eval) `evaluation ( <{EvalRule ","}+ evalRules> 
 DocumentSymbol deployToOutline(d:(Deploy) `deployment ( port = <IntLit port> )`) =
     symbol("deployment(port=<port>)", DocumentSymbolKind::\constructor(), d.src);
 
-DocumentSymbol monitorToOutline(mon:(Monitor) `monitoring ( <{DriftRule ","}* driftRules> , <LatencyRule latencyRule> )`) {
+DocumentSymbol monitorToOutline(mon:(Monitor) `monitoring ( <{DriftRule ","}+ driftRules> , <LatencyRule latencyRules> )`) {
     list[DocumentSymbol] children = [driftRuleToOutline(dr) | DriftRule dr <- driftRules];
-    children += symbol("<latencyRule>", DocumentSymbolKind::\property(), latencyRule.src);
+    children += symbol("<latencyRules>", DocumentSymbolKind::\property(), latencyRules.src);
     return symbol("monitoring", DocumentSymbolKind::\constructor(), mon.src, children=children);
 }
 
-DocumentSymbol monitorToOutline(mon:(Monitor) `monitoring ( <{DriftRule ","}* driftRules> )`) {
+DocumentSymbol monitorToOutline(mon:(Monitor) `monitoring ( <{DriftRule ","}+ driftRules> )`) {
     list[DocumentSymbol] children = [driftRuleToOutline(dr) | DriftRule dr <- driftRules];
     return symbol("monitoring", DocumentSymbolKind::\constructor(), mon.src, children=children);
 }
 
-DocumentSymbol driftRuleToOutline(dr:(DriftRule) `<DriftMethod dMethod> ( feature = <StrLit feature> , window = <IntLit window> , checkFrequency = <IntLit freq> , minEffect = <FloatLit minEffect>) \<= <FloatLit threshold>`) =
+DocumentSymbol monitorToOutline(mon:(Monitor) `monitoring ( <LatencyRule latencyRule> )`) {
+    list[DocumentSymbol] children = [symbol("<latencyRule>", DocumentSymbolKind::\property(), latencyRule.src)];
+    return symbol("monitoring", DocumentSymbolKind::\constructor(), mon.src, children=children);
+}
+
+DocumentSymbol driftRuleToOutline(dr:(DriftRule) `<DriftMethod dMethod> ( feature = <StrLit feature> , window = <IntLit window> , checkFrequency = <IntLit _> , minEffect = <FloatLit _>) \<= <FloatLit threshold>`) =
     symbol("<dMethod>(<feature>, window=<window>) \<= <threshold>", DocumentSymbolKind::\property(), dr.src);

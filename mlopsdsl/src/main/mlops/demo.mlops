@@ -38,6 +38,7 @@ pipeline demo {
 
     monitoring (
         driftKS(feature = "Fare", window = 500, checkFrequency = 50, minEffect = 0.1) <= 0.05,
+        driftChiSquare(feature = "Sex", window = 650, checkFrequency = 100, minEffect = 0.15) <= 0.01,
         latency <= 500
     )
 }

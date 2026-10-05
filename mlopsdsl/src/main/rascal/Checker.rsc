@@ -288,10 +288,11 @@ MLOpsStore checkMonitorSem(AST::Monitor monitor, MLOpsStore store) {
         store.messages += {<monitor.src, error("Cannot store user data for monitoring without connected database.", monitor.src,
             fixes=prepareNoConnectionFixes(monitor.src))>};
     }
+    list[AST::DriftRule] driftRules = driftRulesOf(monitor);
     list[loc] ruleLocs = [dr.src | dr <- monitor.driftRules];
     set[str] seenFeatures = {};
     for (int i <- [0..size(monitor.driftRules)]) {
-        AST::DriftRule driftRule = monitor.driftRules[i];
+        AST::DriftRule driftRule = driftRules[i];
         tuple[str feat, int win, int freq, real minEffect, real threshold] dRule = <driftRule.feature.content, driftRule.window, driftRule.freq, driftRule.minEffect, driftRule.threshold>;
 
         if (dRule.feat == store.targetVariable) {
@@ -322,8 +323,9 @@ MLOpsStore checkMonitorSem(AST::Monitor monitor, MLOpsStore store) {
     }
 
     Maybe[int] ms = nothing();
-    if (size(monitor.latencyRule) != 0) {
-        AST::LatencyRule lRule = monitor.latencyRule[0];
+    list[AST::LatencyRule] latencyRule = latencyRuleOf(monitor);
+    if (size(latencyRule) != 0) {
+        AST::LatencyRule lRule = latencyRule[0];
         int parsedMs = lRule.ms;
         if (parsedMs <= 0) {
             store.messages += {<lRule.src, error("Latency cannot be smaller or equal to 0.", lRule.src)>};
@@ -334,6 +336,12 @@ MLOpsStore checkMonitorSem(AST::Monitor monitor, MLOpsStore store) {
 
     return mStore(store.targetVariable, store.dbConnection, store.task, store.messages);
 }
+
+list[DriftRule] driftRulesOf(stepMonitor(list[DriftRule] drs, _)) = drs;
+list[DriftRule] driftRulesOf(stepMonitorLatency(_)) = [];
+
+list[LatencyRule] latencyRuleOf(stepMonitor(_, list[LatencyRule] lr)) = lr;
+list[LatencyRule] latencyRuleOf(stepMonitorLatency(LatencyRule l)) = [l];
 
 Summary mlopsSummaryServiceType(loc l, AST::Pipeline input) {
     Summary s = summary(l);

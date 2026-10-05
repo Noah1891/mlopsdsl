@@ -292,7 +292,9 @@ MLOpsStore evalDeploy(Deploy d:stepDeploy(int port), MLOpsStore s) {
     return store(s.name, deployed(port), s.targetVariable, s.dbConnection, s.trainedModelFilePath, s.monitored, s.latency);
 }
 
-MLOpsStore evalMonitor(Monitor mon:stepMonitor(list[DriftRule] driftRules, list[LatencyRule] latencyRule), MLOpsStore s, PID pid) {
+MLOpsStore evalMonitor(Monitor mon, MLOpsStore s, PID pid) {
+    list[AST::DriftRule] driftRules = driftRulesOf(mon);
+    list[AST::LatencyRule] latencyRule = latencyRuleOf(mon);
     if (!(deployed(_) := s.state)) {
         throw noDeploymentDeclared("User inputs cannot be monitored without deployed model.");
     }
@@ -337,9 +339,11 @@ MLOpsStore evalMonitor(Monitor mon:stepMonitor(list[DriftRule] driftRules, list[
         thresholds += dRule.threshold;
         seenFeatures += {dRule.feat};
     }
-    PythonCmd cmd = monitorCmd("MONITOR", methods, monitored, windows, freqs, minEffects, thresholds);
-    PythonResponse res = sendJsonToPython(pid, cmd);
-    reportResult(res, "MONITOR", mon.src);
+    if (size(driftRules) != 0) {
+        PythonCmd cmd = monitorCmd("MONITOR", methods, monitored, windows, freqs, minEffects, thresholds);
+        PythonResponse res = sendJsonToPython(pid, cmd);
+        reportResult(res, "MONITOR", mon.src);
+    }   
     Maybe[int] ms = nothing();
     if (size(latencyRule) != 0) {
         int parsedMs = evalLatencyRule(latencyRule[0]);
@@ -350,6 +354,12 @@ MLOpsStore evalMonitor(Monitor mon:stepMonitor(list[DriftRule] driftRules, list[
     }
     return store(s.name, s.state, s.targetVariable, s.dbConnection, s.trainedModelFilePath, size(monitored) != 0, ms);
 }
+
+list[DriftRule] driftRulesOf(stepMonitor(list[DriftRule] drs, _)) = drs;
+list[DriftRule] driftRulesOf(stepMonitorLatency(_)) = [];
+
+list[LatencyRule] latencyRuleOf(stepMonitor(_, list[LatencyRule] lr)) = lr;
+list[LatencyRule] latencyRuleOf(stepMonitorLatency(LatencyRule l)) = [l];
 
 tuple[str method, str feat, int win, int freq, real minEffect, real threshold] evalDriftRule(ruleDrift(DriftMethod dMethod, StrLit feature, int window, int freq, real minEffect, real threshold)) {
     str feat = evalStrLit(feature);

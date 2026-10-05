@@ -21,7 +21,8 @@ syntax Eval = stepEval: "evaluation" "(" {EvalRule ","}+ evalRules ")";
 
 syntax Deploy = stepDeploy: "deployment" "(" "port" "=" IntLit port ")";
 
-syntax Monitor = stepMonitor: "monitoring" "(" {DriftRule ","}* driftRules  ("," LatencyRule latencyRule)?")";
+syntax Monitor = stepMonitor: "monitoring" "(" {DriftRule ","}+ driftRules ("," LatencyRule latencyRules)? ")"
+               | stepMonitorLatency: "monitoring" "(" LatencyRule latencyRule ")";
 
 syntax PrepTransform = prepFill: "fillna" "(" StrLit feature "," FillStrategy strategy ")"
   | prepEncode: "encode" "(" StrLit feature "," EncodingMethod method ")"
@@ -77,11 +78,11 @@ lexical StrContent = ![\"]*;
 
 keyword Keywords
   = "pipeline" 
-  | "load" | "path" | "target"
+  | "load" | "path" | "target" | "databaseURL"
   | "split" | "ratio" | "random_state"
   | "select" | "features"
   | "transformation" | "fillna" | "encode" | "scale" | "mean" | "median" | "mode" | "onehot" | "label" | "std" | "minmax" 
-  | "model" | "LinReg" | "RandomForest" | "LogReg"
+  | "model" | "LinReg" | "RandomForest" | "LogReg" | "dir"
   | "evaluation" | "accuracy" | "precision" | "recall" | "f1" | "mse" | "rmse"
   | "deployment" | "port"
-  | "monitoring" | "drift" | "feature" | "window" | "latency";
+  | "monitoring" | "feature" | "window" | "checkFrequency" | "minEffect" | "driftKS" | "driftChiSquare" | "latency";
